@@ -245,7 +245,7 @@ const N=76,E=[0,19,38,57],CN=['الأزرق','الأحمر','الأخضر','ال
 const NAME=['أنت','الخصم الأيسر','شريكك','الخصم الأيمن'],RK=['A','2','3','4','5','6','7','8','9','10','J','Q','K'],SU=['♠','♥','♦','♣'];
 const HINT={A:'تنزيل أو 1 أو 11',K:'تنزيل أو 13 وتقتل الطريق',Q:'12 خطوة',J:'بدّل بأي دحلة',4:'4 للخلف',5:'5 لأي دحلة',7:'7 على حركتين',10:'10 أو امنع التالي'};
 const $=i=>document.getElementById(i),later=(ms,f)=>setTimeout(f,ms);
-let S,MS=[],RG=[],TW=[],PS=[],ren,cam;
+let S,MS=[],RG=[],TW=[],PS=[];
 
 // ---------- نظام الغرف والدعوات ----------
 let roomID = null;
@@ -513,10 +513,7 @@ function draw(){
 $('hand').onclick=e=>{const b=e.target.closest('.cd');if(b)pick(+b.dataset.i)};
 $('msg').onclick=e=>{const b=e.target.closest('button');if(!b)return;if(b.dataset.x)cancel();else optClick(+b.dataset.k)};
 /* ---------- المشهد: اللوحة المربعة الكلاسيكية ---------- */
-const cv=$('cv');
-ren=new THREE.WebGLRenderer({canvas:cv,antialias:true});
-const scene=new THREE.Scene();
-cam=new THREE.PerspectiveCamera(45,1,.1,300);
+const cv=$('cv'),ren=new THREE.WebGLRenderer({canvas:cv,antialias:true}),scene=new THREE.Scene(),cam=new THREE.PerspectiveCamera(45,1,.1,300);
 ren.shadowMap.enabled=true;ren.shadowMap.type=THREE.PCFSoftShadowMap;ren.setPixelRatio(Math.min(devicePixelRatio,2));ren.outputEncoding=THREE.sRGBEncoding;ren.toneMapping=THREE.ACESFilmicToneMapping;ren.toneMappingExposure=1.05;
 const lc=h=>new THREE.Color(h).convertSRGBToLinear();scene.background=lc(0x0a0706);
 const rnd=Math.random,ZT=10.7,BT=.4,SC=1024/27,OFF=[[-1.5,0],[-1.24,1.24],[1.5,0],[0,1.5]],FX=[],PILE=[],PCOL=[0x1b4fbf,0xc9161e,0x1d8a3e,0xd9a01a];
@@ -705,9 +702,8 @@ function hit(e,o){V2.set(e.clientX/innerWidth*2-1,-e.clientY/innerHeight*2+1);RC
 cv.onclick=e=>{if(camMode!==1)handleGameClick(e.clientX,e.clientY)};
 cv.onpointermove=e=>{if(camMode===1)return;cv.style.cursor=S.stage>=3&&((RG.length&&hit(e,RG))||(hit(e,S.srcs)))?'pointer':'default'};
 function rs(){updateCamera()}
-addEventListener('resize',rs);
+addEventListener('resize',rs);rs();
 newGame();
-updateCamera();
 initFirebase();
 syncInterval = setInterval(syncStateToFirebase, 500);
 const clk=new THREE.Clock();
