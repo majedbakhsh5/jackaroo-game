@@ -7,7 +7,7 @@
 <style>
 :root{--bg:#120d0a;--pn:rgba(42,27,20,.88);--tx:#f3e9da;--mu:#b9a58f;--ac:#e6b94d;--ln:#6b4a36;color-scheme:dark;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
 html,body{height:100%;margin:0;overflow:hidden;background:var(--bg);color:var(--tx);font-family:"Segoe UI",Tahoma,"Noto Naskh Arabic",Arial,sans-serif}
-canvas{display:block;position:fixed;inset:0}
+canvas{display:block;position:fixed;inset:0;touch-action:none}
 .pn{position:fixed;background:var(--pn);border:1px solid var(--ln);border-radius:10px;padding:8px 12px;font-size:13px;backdrop-filter:blur(6px);z-index:4}
 #top{right:10px;top:calc(10px + env(safe-area-inset-top,0px));min-width:170px}
 #top b{font-size:16px}
@@ -39,6 +39,13 @@ button{font:inherit}
 .tb{position:fixed;left:0;right:0;pointer-events:none;z-index:3;backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px)}
 #tt{top:0;height:16%;-webkit-mask-image:linear-gradient(#000,transparent);mask-image:linear-gradient(#000,transparent)}
 #tb2{bottom:0;height:14%;-webkit-mask-image:linear-gradient(transparent,#000);mask-image:linear-gradient(transparent,#000)}
+/* أزرار التحكم */
+#controls{position:fixed;left:10px;bottom:calc(160px + env(safe-area-inset-bottom,0px));z-index:6;display:flex;flex-direction:column;gap:8px;transition:opacity .3s}
+#controls button{background:var(--pn);color:var(--tx);border:1px solid var(--ln);border-radius:8px;padding:8px 12px;font-size:13px;cursor:pointer;backdrop-filter:blur(4px);min-width:70px}
+#controls button:hover,#controls button:active{background:var(--ac);color:#1a1405}
+#camToggle{position:fixed;right:10px;bottom:calc(160px + env(safe-area-inset-bottom,0px));z-index:6;background:var(--pn);color:var(--tx);border:1px solid var(--ln);border-radius:8px;padding:8px 14px;font-size:13px;cursor:pointer;backdrop-filter:blur(4px)}
+#camToggle:hover,#camToggle:active{background:var(--ac);color:#1a1405}
+@media (max-width:768px){#log{width:40vw;font-size:11px}#help{max-width:45vw;font-size:11px;top:120px}#top{min-width:140px;font-size:12px}#top b{font-size:14px}.cd{height:min(110px,15vh,24vw)}#ob button{padding:7px 10px;font-size:13px}#controls{bottom:calc(130px + env(safe-area-inset-bottom,0px))}#camToggle{bottom:calc(130px + env(safe-area-inset-bottom,0px))}}
 </style>
 </head>
 <body>
@@ -54,6 +61,14 @@ button{font:inherit}
 <b>الأوراق:</b> 2 و3 و6 و8 و9: بقيمتها · 4: أربع خطوات للخلف · 5: تحرّك بها أي دحلة على اللوح لك أو لغيرك خمس خطوات · 7: سبع خطوات بدحلة واحدة، أو دحلتين بأي توزيع مجموعه 7 · 10: عشر خطوات، أو تمنع اللاعب التالي من اللعب فيرمي ورقة بلا لعب · J: تبدّل دحلتك بأي دحلة أخرى على اللوح إلا الواقفة في بيت صاحبها · Q: 12 خطوة · K: تنزيل دحلة، أو 13 خطوة تقتل بها كل ما في طريقك حتى دحلتك، إلا الواقفة في بيت صاحبها · A: تنزيل دحلة، أو خطوة، أو 11.</div></details>
 <div id="msg"></div>
 <div id="hand"></div>
+
+<!-- أزرار التحكم بالدوران -->
+<button id="camToggle" onclick="toggleCameraMode()">🔄 viewpoint</button>
+<div id="controls" style="display:none">
+  <button onclick="resetCamera()">🏠 رئيسي</button>
+  <button onclick="showHint()">💡 توضيح</button>
+</div>
+
 <script src="three.min.js"></script>
 <script>
 const N=76,E=[0,19,38,57],CN=['الأزرق','الأحمر','الأخضر','الذهبي'],COL=[0x2f78ff,0xe03a2f,0x2fae4f,0xe8b230],HX=['#5b9bff','#ff6a5c','#5fd37d','#f5c451'];
@@ -61,6 +76,98 @@ const NAME=['أنت','الخصم الأيسر','شريكك','الخصم الأي
 const HINT={A:'تنزيل أو 1 أو 11',K:'تنزيل أو 13 وتقتل الطريق',Q:'12 خطوة',J:'بدّل بأي دحلة',4:'4 للخلف',5:'5 لأي دحلة',7:'7 على حركتين',10:'10 أو امنع التالي'};
 const $=i=>document.getElementById(i),later=(ms,f)=>setTimeout(f,ms);
 let S,MS=[],RG=[],TW=[],PS=[];
+
+/* ---------- وضع الكاميرا والدوران ---------- */
+let camMode=0;
+let camAngleX=0.3, camAngleY=0, camDist=25;
+const CAM_TARGET={x:0,y:8,z:0};
+
+function updateCamera(){
+  const w=innerWidth, h=innerHeight;
+  const k=Math.max(1,1.05/(w/h));
+  ren.setSize(w,h);
+  cam.aspect=w/h;
+  const radX=camAngleX, radY=camAngleY;
+  cam.position.set(
+    CAM_TARGET.x + camDist*Math.sin(radY)*Math.cos(radX),
+    CAM_TARGET.y + camDist*Math.sin(radX),
+    CAM_TARGET.z + camDist*Math.cos(radY)*Math.cos(radX)
+  );
+  cam.lookAt(CAM_TARGET.x, CAM_TARGET.y, CAM_TARGET.z);
+  cam.setViewOffset(w,h,0,h*(w<h?.1:.09),w,h);
+  cam.updateProjectionMatrix();
+}
+
+function toggleCameraMode(){
+  camMode=(camMode+1)%3;
+  const ctrl=$('controls');
+  if(camMode===0){
+    camAngleX=0.3; camAngleY=0;
+    ctrl.style.display='none';
+  } else if(camMode===1){
+    ctrl.style.display='flex';
+  } else {
+    camAngleX=0.8; camAngleY=0;
+    ctrl.style.display='none';
+  }
+  updateCamera();
+}
+
+function resetCamera(){
+  camAngleX=0.3; camAngleY=0;
+  updateCamera();
+}
+
+function showHint(){
+  if(!S||S.over)return;
+  const cd=S.hands[0][S.sel];
+  if(cd){
+    S.msg=`توضيح: ${cd.r}${cd.s} - ${HINT[cd.r]||'انقر للحركة'}`;
+    draw();
+    later(3000,()=>{if(S&&!S.over)S.msg='';draw()});
+  }
+}
+
+/* ---------- الإدخال باللمس للدوران ---------- */
+let lastTouch=null;
+cv.addEventListener('touchstart',e=>{
+  if(e.touches.length===1&&camMode===1){
+    const t=e.touches[0];
+    lastTouch={x:t.clientX,y:t.clientY,tapTime:Date.now()};
+  }
+},{passive:true});
+
+cv.addEventListener('touchmove',e=>{
+  if(camMode!==1||!lastTouch)return;
+  const t=e.touches[0];
+  const dx=t.clientX-lastTouch.x;
+  const dy=t.clientY-lastTouch.y;
+  camAngleY+=dx*0.005;
+  camAngleX+=dy*0.005;
+  camAngleX=Math.max(-0.5,Math.min(1.2,camAngleX));
+  lastTouch={x:t.clientX,y:t.clientY,tapTime:lastTouch.tapTime};
+  updateCamera();
+},{passive:true});
+
+cv.addEventListener('touchend',e=>{
+  if(camMode===1&&lastTouch&&Date.now()-lastTouch.tapTime<200){
+    const t=e.changedTouches[0];
+    handleGameClick(t.clientX,t.clientY);
+  }
+  lastTouch=null;
+},{passive:true});
+
+/* ---------- دالة النقر على اللعبة ---------- */
+function handleGameClick(cx,cy){
+  V2.set(cx/innerWidth*2-1,-cy/innerHeight*2+1);
+  RC.setFromCamera(V2,cam);
+  if(S.busy||S.turn||S.phase!=='play'||S.stage<3)return;
+  let h=RC.intersectObjects(RG,true)[0];
+  if(h){play(0,S.sel,h.object.userData.mv);return}
+  h=RC.intersectObjects(S.srcs,true)[0];
+  if(h)selMarble(h.object.userData.p,h.object.userData.i,false);
+}
+
 /* ---------- المحرك ---------- */
 const abs=(p,r)=>((E[p]+r)%N+N)%N,home=p=>S.m[p].every(r=>r>=LN),ctrl=p=>home(p)?(p+2)%4:p;
 function occ(a,c,i){for(let q=0;q<4;q++)for(let j=0;j<4;j++){const r=S.m[q][j];if(r>Y&&r<LN&&abs(q,r)===a&&!(q===c&&j===i))return[q,j]}return null}
@@ -360,10 +467,9 @@ function drawLeader(){const d=[],V={A:14,K:13,Q:12,J:11},v=c=>(V[c.r]||+c.r)*10+
 /* ---------- الإدخال والعرض ---------- */
 const RC=new THREE.Raycaster(),V2=new THREE.Vector2();
 function hit(e,o){V2.set(e.clientX/innerWidth*2-1,-e.clientY/innerHeight*2+1);RC.setFromCamera(V2,cam);return RC.intersectObjects(o,true)[0]}
-cv.onclick=e=>{if(S.busy||S.turn||S.phase!=='play'||S.stage<3)return;let h=hit(e,RG);if(h){play(0,S.sel,h.object.userData.mv);return}
- h=hit(e,S.srcs);if(h)selMarble(h.object.userData.p,h.object.userData.i,false)};
-cv.onpointermove=e=>{cv.style.cursor=S.stage>=3&&((RG.length&&hit(e,RG))||(hit(e,S.srcs)))?'pointer':'default'};
-function rs(){const w=innerWidth,h=innerHeight,k=Math.max(1,1.05/(w/h));ren.setSize(w,h);cam.aspect=w/h;{const m=w<h?1:1.12;cam.position.set(0,23.5*m*k,19.6*m*k)}cam.lookAt(0,0,1.8);cam.setViewOffset(w,h,0,h*(w<h?.1:.09),w,h);cam.updateProjectionMatrix()}
+cv.onclick=e=>{if(camMode!==1)handleGameClick(e.clientX,e.clientY)};
+cv.onpointermove=e=>{if(camMode===1)return;cv.style.cursor=S.stage>=3&&((RG.length&&hit(e,RG))||(hit(e,S.srcs)))?'pointer':'default'};
+function rs(){updateCamera()}
 addEventListener('resize',rs);rs();
 newGame();
 const clk=new THREE.Clock();
