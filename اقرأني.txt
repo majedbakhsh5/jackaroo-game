@@ -1,0 +1,9 @@
+حزمة موقع لعبة جاكارو ثلاثية الأبعاد
+====================================
+1) استبدل majedbakhsh5.github.io/jackaroo-game باسم نطاقك، وmajedbakhsh5@gmail.com ببريدك، في الملفات:
+   index.html rules.html about.html privacy.html contact.html play.html robots.txt sitemap.xml
+   (ابحث واستبدل في كل الملفات دفعة واحدة)
+2) اكتب تاريخ آخر تحديث في privacy.html.
+3) ارفع كل محتويات هذا المجلد إلى الاستضافة (مجلد واحد، index.html في الجذر).
+4) بعد قبول AdSense: افتح ads-config.js وضع الأرقام، وضع رقم ناشرك في ads.txt.
+ملاحظة: مكتبة three.min.js مرخّصة MIT (انظر three.LICENSE.txt).

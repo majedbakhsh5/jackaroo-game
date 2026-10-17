@@ -1,0 +1,31 @@
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:#120d0a;color:#f3e9da;font:16px/1.8 "Segoe UI",Tahoma,"Noto Naskh Arabic",Arial,sans-serif}
+a{color:#e6b94d}
+.top{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px 18px;padding:12px 18px;background:#241812;border-bottom:1px solid #6b4a36}
+.brand{font-weight:800;font-size:19px;text-decoration:none;color:#f3e9da}
+nav a{margin-inline-start:14px;text-decoration:none;color:#d9c7ac;font-size:15px}
+nav a.on,nav a:hover{color:#e6b94d}
+.wrap{max-width:860px;margin:0 auto;padding:24px 18px}
+h1{font-size:30px;line-height:1.3}h2{margin-top:32px;border-bottom:1px solid #4a3426;padding-bottom:6px}
+.lead{font-size:19px;color:#e9dcc6}
+.hero{text-align:center;padding:30px 0 10px}
+.btn{display:inline-block;background:#e6b94d;color:#1a1405;font-weight:800;padding:13px 34px;border-radius:10px;text-decoration:none;font-size:20px}
+.feat li{margin:8px 0}
+table{width:100%;border-collapse:collapse;margin:14px 0}
+th,td{border:1px solid #4a3426;padding:8px 12px;text-align:start;vertical-align:top}th{background:#2a1c14}
+.ad-slot{margin:34px auto;text-align:center;min-height:0}
+.foot{margin-top:40px;padding:18px;background:#241812;border-top:1px solid #6b4a36;text-align:center;font-size:14px}
+.foot p{margin:6px 0 0;color:#a89580}
+body.play{height:100%;overflow:hidden}
+html:has(body.play){height:100%}
+#shell{display:flex;flex-direction:column;height:100vh;height:100dvh}
+#row{flex:1;display:flex;min-height:0;direction:ltr}
+#game{flex:1;min-width:0;height:100%;border:0;background:#0c0907}
+#gap{display:none}
+.adbox{display:none}
+#pf{flex:none;padding:3px 8px;background:#1b120d;text-align:center;font-size:12px;line-height:22px;white-space:nowrap;overflow:hidden}
+#pf a{margin:0 7px}
+body.wide #gap{display:block;flex:none;width:150px}
+body.wide #rail{display:flex;flex:none;width:160px;align-items:center;justify-content:center;margin-inline-end:8px}
+body.mob #bn{display:flex;flex:none;justify-content:center;align-items:center;height:62px;margin-bottom:16px;border-bottom:1px solid #4a3426;background:#1b120d}
