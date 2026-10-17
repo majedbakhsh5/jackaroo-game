@@ -314,6 +314,7 @@ let camAngleX=0.3, camAngleY=0, camDist=25;
 const CAM_TARGET={x:0,y:8,z:0};
 
 function updateCamera(){
+  if(!window.ren || !window.cam) return;
   const w=innerWidth, h=innerHeight;
   const k=Math.max(1,1.05/(w/h));
   ren.setSize(w,h);
@@ -701,8 +702,11 @@ function hit(e,o){V2.set(e.clientX/innerWidth*2-1,-e.clientY/innerHeight*2+1);RC
 cv.onclick=e=>{if(camMode!==1)handleGameClick(e.clientX,e.clientY)};
 cv.onpointermove=e=>{if(camMode===1)return;cv.style.cursor=S.stage>=3&&((RG.length&&hit(e,RG))||(hit(e,S.srcs)))?'pointer':'default'};
 function rs(){updateCamera()}
-addEventListener('resize',rs);rs();
+addEventListener('resize',rs);
 newGame();
+updateCamera();
+initFirebase();
+syncInterval = setInterval(syncStateToFirebase, 500);
 initFirebase();
 syncInterval = setInterval(syncStateToFirebase, 500);
 const clk=new THREE.Clock();
