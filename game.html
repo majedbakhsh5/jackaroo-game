@@ -707,8 +707,6 @@ newGame();
 updateCamera();
 initFirebase();
 syncInterval = setInterval(syncStateToFirebase, 500);
-initFirebase();
-syncInterval = setInterval(syncStateToFirebase, 500);
 const clk=new THREE.Clock();
 (function loop(){requestAnimationFrame(loop);const dt=Math.min(clk.getDelta(),.05),t=clk.elapsedTime;
  for(let k=TW.length-1;k>=0;k--){const w=TW[k];if((w.del-=dt)>0)continue;w.e+=dt;const u=Math.min(1,w.e/w.d),s=u<.5?2*u*u:1-2*(1-u)*(1-u);
