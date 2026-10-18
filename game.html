@@ -5,9 +5,20 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>جاكارو ثلاثية الأبعاد</title>
 <meta name="robots" content="noindex">
-<link rel="stylesheet" href="game.css?v=20261018-rooms1">
+<link rel="stylesheet" href="game.css?v=20261018-lobby1">
 </head>
-<body>
+<body class="choosing">
+<section id="startMenu" aria-labelledby="startTitle">
+  <div class="start-brand">جاكارو <span>ثلاثية الأبعاد</span></div>
+  <h1 id="startTitle">كيف تحب أن تلعب؟</h1>
+  <p>اختر نمط اللعب، ثم خذ مكانك على اللوح.</p>
+  <div class="start-options">
+    <button id="startJoin" hidden><strong>انضم إلى غرفة الأصدقاء</strong><span>افتح الدعوة والعب معهم</span></button>
+    <button id="startFriends"><strong>العب مع الأصدقاء</strong><span>أنشئ غرفة وشارك رابط الدعوة، ثم ابدأ المباراة</span></button>
+    <button id="startAI"><strong>العب مع الكمبيوتر</strong><span>مباراة فردية مع ثلاثة لاعبين بالذكاء الاصطناعي</span></button>
+  </div>
+  <p id="startStatus" role="status">لا تبدأ المباراة إلا بعد اختيارك.</p>
+</section>
 <div id="hud">
 <div id="top" class="pn"><div id="turn"></div><div id="connection" role="status">لعب فردي ضد الكمبيوتر</div><div id="score"></div><button onclick="newGame()">لعبة جديدة</button></div>
 <details id="help" class="hud-details"><summary>قوانين اللعبة</summary>
@@ -40,6 +51,13 @@
   <button onclick="leaveSpectate()" style="background:var(--ac);color:#1a1405;border:0;border-radius:8px;padding:10px 20px;font-size:14px;font-weight:700;cursor:pointer"> مغادرة </button>
 </div>
 
+<div id="zoomControls" role="group" aria-label="تكبير اللوح وتصغيره">
+<button onclick="changeZoom(1.2)" aria-label="تكبير اللوح">＋</button>
+<button onclick="changeZoom(1/1.2)" aria-label="تصغير اللوح">−</button>
+<button onclick="resetCamera()" aria-label="إظهار اللوح كاملاً">ملاءمة</button>
+</div>
+<button id="startMatch" onclick="newGame()" hidden>ابدأ المباراة</button>
+<button onclick="location.href='game.html'">القائمة</button>
 <!-- أزرار التحكم بالدوران -->
 <button id="camToggle" onclick="toggleCameraMode()">🔄 زاوية العرض</button>
 <div id="controls" style="display:none">
@@ -48,12 +66,12 @@
 </div>
 
 </div>
+<details id="invitePanel" hidden><summary>رابط دعوة الأصدقاء</summary><div><label for="inviteLink">أرسل هذا الرابط لأصدقائك</label><input id="inviteLink" readonly dir="ltr"><button onclick="shareGame()">نسخ / مشاركة الرابط</button><p>ابدأ المباراة عند استعدادكم. يلعب الكمبيوتر المقاعد الشاغرة.</p></div></details>
 <div id="hand" aria-label="أوراقك"></div>
 <div id="gameError" role="alert" hidden></div>
 <script src="room-config.js?v=20261018-rooms1"></script>
 <script src="room-client.js?v=20261018-rooms1"></script>
 <script src="game-boot.js?v=20261018-rooms2"></script>
-<script src="three.min.js?v=20261018-rooms1"></script>
-<script src="game.js?v=20261018-rooms1"></script>
+<script src="game-lobby.js?v=20261018-lobby1"></script>
 </body>
 </html>
