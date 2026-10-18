@@ -3,8 +3,8 @@ const assert=require('node:assert/strict');
 const fs=require('node:fs');
 const vm=require('node:vm');
 function lobby(room=''){
- const elements=Object.fromEntries(['startMenu','startStatus','startAI','startFriends','startJoin'].map(id=>[id,{hidden:false,disabled:false,textContent:'',focus(){}}]));
- const scripts=[];const context={URL,location:{href:'https://jackaro.homes/game.html'+room},window:{},document:{getElementById:id=>elements[id],body:{classList:{remove(){}}},createElement:()=>({}),head:{appendChild:s=>scripts.push(s)}}};
+ const elements=Object.fromEntries(['startMenu','startStatus','startAI','startFriends','startJoin','playerName'].map(id=>[id,{hidden:false,disabled:false,textContent:'',value:'Majed',focus(){},setCustomValidity(){},reportValidity(){},addEventListener(){}}]));
+ const scripts=[];const context={URL,sessionStorage:{getItem:()=> 'Majed',setItem(){}},location:{href:'https://jackaro.homes/game.html'+room},window:{},document:{getElementById:id=>elements[id],body:{classList:{remove(){}}},createElement:()=>({}),head:{appendChild:s=>scripts.push(s)}}};
  vm.runInNewContext(fs.readFileSync('game-lobby.js','utf8'),context);return {elements,scripts,context};
 }
 test('opening play loads no game or Firebase connection before a mode is selected',()=>{
