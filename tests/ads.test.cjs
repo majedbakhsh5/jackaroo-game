@@ -7,11 +7,10 @@ function run(config,width=1366,height=768){
  vm.runInNewContext(source,context);return {boxes,classes,events,scripts,window:context.window};
 }
 const config={client:'ca-pub-1170827657733432',privacyReady:true,slotRail:'1234567890',slotBanner:'1234567891',mobileBanner:true};
-test('unconfigured or unapproved ad setup never reserves game space or loads ads',()=>{
- for(const c of [{...config,privacyReady:false},{...config,slotRail:'',slotBanner:''}]){const result=run(c);assert.equal(result.scripts.length,0);assert.equal(result.classes.size,0)}
-});
+test('ad setup remains inactive until consent messaging is configured',()=>{const r=run({...config,privacyReady:false});assert.equal(r.scripts.length,0);assert.equal(r.classes.size,0)});
+test('the consent tag loads even when no ad slot fits; no ad request or game gutter is created',()=>{const r=run({...config,slotRail:'',slotBanner:''});assert.equal(r.scripts.length,1);assert.equal(r.window.adsbygoogle,undefined);assert.equal(r.classes.size,0);assert.equal(r.window.googlefc.callbackQueue.length,1)});
 test('desktop unit loads once and does not refresh on resize',()=>{
  const r=run(config);assert(r.classes.has('wide'));assert.equal(r.scripts.length,1);assert.equal(r.window.adsbygoogle.length,1);r.events.resize();r.events.resize();assert.equal(r.scripts.length,1);assert.equal(r.window.adsbygoogle.length,1);
 });
-test('small mobile screens retain their full game area',()=>{const r=run(config,390,844);assert.equal(r.classes.size,0);assert.equal(r.scripts.length,0)});
+test('small mobile screens retain their full game area',()=>{const r=run(config,390,844);assert.equal(r.classes.size,0);assert.equal(r.window.adsbygoogle,undefined);assert.equal(r.scripts.length,1)});
 test('network failure releases reserved ad space and does not retry on resize',()=>{const r=run(config);r.scripts[0].onerror();assert.equal(r.classes.size,0);r.events.resize();assert.equal(r.classes.size,0);assert.equal(r.scripts.length,1)});
