@@ -59,33 +59,50 @@ async function connectRoom(id){
  NAME.splice(0,4,...['الأزرق','الأحمر','الأخضر','الذهبي']);
  $('top').querySelector('button').disabled=!room.isHost;
  const url=new URL(location.href);url.searchParams.set('room',room.id);history.replaceState({},'',url);
- if(room.isHost){if(room.restored){resetGameTimers();S={...S,...room.restored,busy:0,sel:null,stage:0,opt:null,srcs:[],moves:[],opts:[],cc:null};for(let p=0;p<4;p++)for(let i=0;i<4;i++)MS[p][i].position.copy(P(p,S.m[p][i],i));draw()}await room.publish(snapshotGame());scheduleCPU()}
+ if(room.isHost){if(room.restored){resetGameTimers();S={...S,...room.restored,busy:room.restored.started?0:1,sel:null,stage:0,opt:null,srcs:[],moves:[],opts:[],cc:null};for(let p=0;p<4;p++)for(let i=0;i<4;i++)MS[p][i].position.copy(P(p,S.m[p][i],i));draw()}await room.publish(snapshotGame());scheduleCPU()}
  else{resetGameTimers();S.busy=1;S.hands=[[],[],[],[]];draw()}
  await room.start();
+ const invite=new URL('play.html',location.href);invite.searchParams.set('room',room.id);$('inviteLink').value=invite.href;
+ $('invitePanel').hidden=!room.isHost;$('invitePanel').open=room.isHost&&!S.started;
+ $('startMatch').hidden=!room.isHost||!!S.started;
+ $('top').querySelector('button').hidden=!S.started;
+ if(room.isHost&&!S.started)connectionStatus('الغرفة جاهزة — شارك الرابط ثم اضغط ابدأ المباراة');
  if(isSpectator){$('spectatorMsg').style.display='block';$('spectatorMsg').querySelector('p').textContent='المقاعد مكتملة. يمكنك إغلاق هذه الرسالة ومشاهدة المباراة.';$('spectatorMsg').querySelector('button').textContent='متابعة المشاهدة';$('spectatorMsg').querySelector('button').onclick=()=>{$('spectatorMsg').style.display='none'}}
 }
 
 /* ---------- وضع الكاميرا والدوران ---------- */
-let camMode=0,camAngleX=1.05,camAngleY=0;
+let camMode=0,camAngleX=1.48,camAngleY=0,boardZoom=1;
 function updateCamera(){
  const rect=$('board').getBoundingClientRect(),w=Math.max(1,rect.width),h=Math.max(1,rect.height);
  ren.setSize(w,h,false);cam.aspect=w/h;cam.clearViewOffset();cam.updateProjectionMatrix();
  const target=new THREE.Vector3(0,.4,0),direction=new THREE.Vector3(Math.sin(camAngleY)*Math.cos(camAngleX),Math.sin(camAngleX),Math.cos(camAngleY)*Math.cos(camAngleX));
- let dist=24;
- for(let i=0;i<160;i++){
-  cam.position.copy(target).addScaledVector(direction,dist);cam.lookAt(target);cam.updateMatrixWorld();
-  let fits=true;for(const x of [-13.6,13.6])for(const z of [-13.6,13.6])for(const y of [.4,1.7]){const p=new THREE.Vector3(x,y,z).project(cam);if(Math.abs(p.x)>.92||Math.abs(p.y)>.92||p.z>1)fits=false}
-  if(fits)break;dist*=1.04;
+ // Fit the home orientation; rotating keeps the same scale instead of pulling away.
+ const fitDirection=new THREE.Vector3(0,Math.sin(camAngleX),Math.cos(camAngleX));
+ let low=14,high=240;
+ for(let i=0;i<24;i++){
+  const dist=(low+high)/2;cam.position.copy(target).addScaledVector(fitDirection,dist);cam.lookAt(target);cam.updateMatrixWorld();
+  let fits=true;for(const x of [-13.8,13.8])for(const z of [-13.8,13.8])for(const y of [.1,1.7]){const p=new THREE.Vector3(x,y,z).project(cam);if(Math.abs(p.x)>.98||Math.abs(p.y)>.98||p.z>1)fits=false}
+  if(fits)high=dist;else low=dist;
  }
+ cam.position.copy(target).addScaledVector(direction,high/boardZoom);cam.lookAt(target);cam.updateMatrixWorld();
 }
-function toggleCameraMode(){camMode=(camMode+1)%3;camAngleX=camMode===2?1.48:1.05;camAngleY=0;$('controls').style.display=camMode===1?'flex':'none';$('camToggle').textContent=['🔄 زاوية العرض','🔄 دوران حر','🔄 من الأعلى'][camMode];updateCamera()}
-function resetCamera(){camAngleX=1.05;camAngleY=0;updateCamera()}
+function changeZoom(factor){boardZoom=Math.max(.7,Math.min(3,boardZoom*factor));updateCamera()}
+function toggleCameraMode(){camMode=(camMode+1)%3;camAngleX=camMode===0?1.48:camMode===1?1.25:1.05;camAngleY=0;$('controls').style.display=camMode===1?'flex':'none';$('camToggle').textContent=['من الأعلى','دوران حر','منظور مائل'][camMode];updateCamera()}
+function resetCamera(){boardZoom=1;camAngleX=camMode===0?1.48:camMode===1?1.25:1.05;camAngleY=0;updateCamera()}
 function showHint(){if(!S||S.over)return;const cd=S.hands[localPlayer()][S.sel];S.msg=cd?`توضيح: ${cd.r}${cd.s} — ${HINT[cd.r]||cd.r+' خطوات'}`:'اختر ورقة أولاً لتظهر طريقة لعبها';draw()}
 function setupTouch(){
- let start=null,moved=false;const canvas=$('cv');
- canvas.addEventListener('pointerdown',e=>{if(camMode!==1)return;start={x:e.clientX,y:e.clientY};moved=false;canvas.setPointerCapture(e.pointerId)});
- canvas.addEventListener('pointermove',e=>{if(!start||camMode!==1)return;const dx=e.clientX-start.x,dy=e.clientY-start.y;if(Math.abs(dx)+Math.abs(dy)>3)moved=true;camAngleY+=dx*.005;camAngleX=Math.max(.55,Math.min(1.48,camAngleX+dy*.005));start={x:e.clientX,y:e.clientY};updateCamera()});
- canvas.addEventListener('pointerup',e=>{if(start&&!moved)handleGameClick(e.clientX,e.clientY);start=null});canvas.addEventListener('pointercancel',()=>{start=null});
+ const pointers=new Map(),canvas=$('cv');let moved=false,last=null,pinch=0;
+ const distance=()=>{const [a,b]=[...pointers.values()];return Math.hypot(a.x-b.x,a.y-b.y)};
+ canvas.addEventListener('wheel',e=>{e.preventDefault();changeZoom(Math.exp(-Math.max(-120,Math.min(120,e.deltaY))*.002))},{passive:false});
+ canvas.addEventListener('pointerdown',e=>{if(e.button!==0&&e.pointerType==='mouse')return;pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});canvas.setPointerCapture(e.pointerId);if(pointers.size===1){last={x:e.clientX,y:e.clientY};moved=false}else{pinch=distance();moved=true}});
+ canvas.addEventListener('pointermove',e=>{
+  if(!pointers.has(e.pointerId))return;const prev=pointers.get(e.pointerId);pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});
+  if(pointers.size>=2){const next=distance();if(pinch>0)changeZoom(next/pinch);pinch=next;moved=true;return}
+  if(last&&Math.hypot(e.clientX-last.x,e.clientY-last.y)>5)moved=true;
+  if(camMode===1&&moved){camAngleY+=(e.clientX-prev.x)*.005;camAngleX=Math.max(.65,Math.min(1.55,camAngleX+(e.clientY-prev.y)*.005));updateCamera()}
+ });
+ const finish=e=>{const tap=e.type==='pointerup'&&pointers.size===1&&!moved;pointers.delete(e.pointerId);pinch=0;if(tap)handleGameClick(e.clientX,e.clientY);if(!pointers.size)last=null};
+ canvas.addEventListener('pointerup',finish);canvas.addEventListener('pointercancel',finish);canvas.addEventListener('lostpointercapture',e=>{pointers.delete(e.pointerId);pinch=0});
 }
 function pointerVector(cx,cy){const r=cv.getBoundingClientRect();V2.set((cx-r.left)/r.width*2-1,-(cy-r.top)/r.height*2+1)}
 
@@ -391,8 +408,8 @@ function anim(mv){const{c,i}=mv;
  const caps=mv.caps.map(([a,b])=>({a,b,at:MS[a][b].position.clone()})),mk=MS[c][i];
  fly(mk,P(c,S.m[c][i],i),.7*(mv.k==='sc'?1.4:1),0,mv.k==='sc'?5:2.2,()=>{burst(mk.position,COL[c],14,.22);ringFx(mk.position,COL[c]);caps.forEach(x=>{burst(x.at,COL[x.a],45,.45);burst(x.at,0xff7a2a,30,.5);ringFx(x.at,0xff6a2a)})});
  caps.forEach(x=>fly(MS[x.a][x.b],P(x.a,Y,x.b),.8,.65,3.2,null))}
-function newGame(){if(room&&!room.isHost)return;networkPending=false;resetGameTimers();clearRings();TW=[];PS.forEach(q=>{scene.remove(q.pt);q.pt.geometry.dispose();q.pt.material.dispose()});PS=[];FX.forEach(q=>{scene.remove(q.m);q.m.geometry.dispose();q.m.material.dispose()});FX.length=0;PILE.forEach(disposeCard);PILE.length=0;if(S&&S.cc)S.cc.remove();S={m:[0,1,2,3].map(()=>[Y,Y,Y,Y]),deck:[],hands:[[],[],[],[]],turn:0,phase:'xchg',starter:3,skip:[0,0,0,0],rem:0,exc:-1,bp:null,sel:null,stage:0,opt:null,srcs:[],moves:[],opts:[],log:[],msg:'',busy:0,over:0,dealt:1,cc:null};
- for(let p=0;p<4;p++)for(let i=0;i<4;i++)MS[p][i].position.copy(P(p,Y,i));drawLeader();startRound()}
+function newGame(start=true){if(room&&!room.isHost)return;if(start){$('top').querySelector('button').hidden=false;$('startMatch').hidden=true;$('invitePanel').open=false;}networkPending=false;resetGameTimers();clearRings();TW=[];PS.forEach(q=>{scene.remove(q.pt);q.pt.geometry.dispose();q.pt.material.dispose()});PS=[];FX.forEach(q=>{scene.remove(q.m);q.m.geometry.dispose();q.m.material.dispose()});FX.length=0;PILE.forEach(disposeCard);PILE.length=0;if(S&&S.cc)S.cc.remove();S={m:[0,1,2,3].map(()=>[Y,Y,Y,Y]),deck:[],hands:[[],[],[],[]],turn:0,phase:'xchg',starter:3,rc:0,started:0,skip:[0,0,0,0],rem:0,exc:-1,bp:null,sel:null,stage:0,opt:null,srcs:[],moves:[],opts:[],log:[],msg:'',busy:0,over:0,dealt:1,cc:null};
+ for(let p=0;p<4;p++)for(let i=0;i<4;i++)MS[p][i].position.copy(P(p,Y,i));if(start){drawLeader();startRound()}else{S.phase='play';S.busy=1;S.msg='بانتظار بدء المضيف للمباراة';S.log=[S.msg];draw()}}
 function drawLeader(){const d=[],V={A:14,K:13,Q:12,J:11},v=c=>(V[c.r]||+c.r)*10+SU.indexOf(c.s);
  for(let p=0;p<4;p++){let c;do{c={r:RK[rnd()*13|0],s:SU[rnd()*4|0]}}while(d.some(x=>x.r===c.r&&x.s===c.s));d.push(c)}
  let l=0;d.forEach((c,p)=>{if(v(c)>v(d[l]))l=p});S.starter=l;log(`سحب الجميع ورقة (${d.map((c,p)=>NAME[p]+' '+c.r+c.s).join('، ')}) فالأعلى لـ${NAME[l]}: قائد الجولة`)}
@@ -400,12 +417,13 @@ function drawLeader(){const d=[],V={A:14,K:13,Q:12,J:11},v=c=>(V[c.r]||+c.r)*10+
 const RC=new THREE.Raycaster(),V2=new THREE.Vector2();
 function hit(e,o){pointerVector(e.clientX,e.clientY);RC.setFromCamera(V2,cam);return RC.intersectObjects(o,true)[0]}
 setupTouch();
-cv.onclick=e=>{if(camMode!==1)handleGameClick(e.clientX,e.clientY)};
-cv.onpointermove=e=>{if(camMode===1)return;cv.style.cursor=S.stage>=3&&((RG.length&&hit(e,RG))||(hit(e,S.srcs)))?'pointer':'default'};
+
+cv.onpointermove=e=>{if(camMode===1)return;cv.style.cursor=S&&S.stage>=3&&((RG.length&&hit(e,RG))||(hit(e,S.srcs)))?'pointer':'default'};
 function rs(){updateCamera()}
 addEventListener('resize',rs);new ResizeObserver(rs).observe($('board'));rs();
-newGame();
-if(roomParam){resetGameTimers();S.busy=1;draw();connectionStatus('جارٍ الاتصال بالغرفة…');connectRoom(roomParam).catch(e=>{connectionStatus(e.message);S.busy=1;$('shareBtn').textContent='لعب فردي';$('shareBtn').onclick=()=>{location.href='game.html'}})}
+const chosenMode=window.JACKAROO_MODE||'ai';
+if(chosenMode==='ai'){newGame();$('shareBtn').hidden=true}
+else{newGame(false);$('top').querySelector('button').hidden=true;$('shareBtn').disabled=true;connectionStatus(chosenMode==='join'?'جارٍ الاتصال بالغرفة…':'جارٍ إنشاء غرفة…');connectRoom(chosenMode==='join'?roomParam:null).then(()=>{$('shareBtn').disabled=false}).catch(e=>{connectionStatus(e.message);$('msg').textContent='تعذر فتح الغرفة. يمكنك العودة للقائمة والمحاولة مجدداً.'})}
 const clk=new THREE.Clock();
 (function loop(){requestAnimationFrame(loop);const dt=Math.min(clk.getDelta(),.05),t=clk.elapsedTime;
  for(let k=TW.length-1;k>=0;k--){const w=TW[k];if((w.del-=dt)>0)continue;w.e+=dt;const u=Math.min(1,w.e/w.d),s=u<.5?2*u*u:1-2*(1-u)*(1-u);
