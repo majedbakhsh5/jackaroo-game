@@ -314,7 +314,6 @@ let camAngleX=0.3, camAngleY=0, camDist=25;
 const CAM_TARGET={x:0,y:8,z:0};
 
 function updateCamera(){
-  if(!ren || !cam) return;
   const w=innerWidth, h=innerHeight;
   const k=Math.max(1,1.05/(w/h));
   ren.setSize(w,h);
