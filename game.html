@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>جاكارو رويال | Obsidian &amp; Gold</title>
 <meta name="robots" content="noindex">
-<link rel="stylesheet" href="game.css?v=20261018-royale3">
+<link rel="stylesheet" href="game.css?v=20261019-phase3-2">
 </head>
 <body class="choosing">
 <section id="startMenu" aria-labelledby="startTitle">
@@ -34,6 +34,7 @@
 </div>
 <div id="roomNotice" role="status" aria-live="polite" hidden></div>
 <div id="board"><canvas id="cv" aria-label="لوح جاكارو رويال ثلاثي الأبعاد"></canvas><div id="playerSeats" aria-label="اللاعبون"></div><div id="zoomControls" role="group" aria-label="تكبير اللوح وتصغيره"><button onclick="changeZoom(1.2)" aria-label="تكبير اللوح">＋</button><button onclick="changeZoom(1/1.2)" aria-label="تصغير اللوح">−</button><button onclick="resetCamera()" aria-label="إظهار اللوح كاملاً">ملاءمة</button></div></div>
+<div id="chatFloatLayer" aria-hidden="true"></div>
 
 <div id="msg" aria-live="polite"></div>
 <div id="toolbar">
@@ -42,7 +43,14 @@
 <button id="roomLeave" onclick="leaveRoom()" hidden>مغادرة الغرفة</button>
 <button id="shareBtn" onclick="shareGame()">📤 مشاركة اللعبة</button>
 <button id="soundToggle" type="button" aria-pressed="true" onclick="toggleSound()">🔊 الصوت</button>
-<details id="chatPanel"><summary aria-label="محادثة الغرفة">💬 المحادثة <span id="chatBadge" hidden>0</span></summary><div id="chatBody"><div id="chatMessages" aria-live="polite"></div><form id="chatForm"><label class="sr-only" for="chatInput">اكتب رسالة</label><input id="chatInput" maxlength="240" autocomplete="off" placeholder="اكتب رسالة قصيرة…"><button type="submit">إرسال</button></form></div></details>
+<div id="chatPanel">
+  <button id="chatToggle" type="button" aria-expanded="false" aria-controls="chatBody">
+    <span class="chat-label">💬 المحادثة</span>
+    <span id="chatMini" hidden><b id="chatMiniName"></b><span aria-hidden="true">:</span><span id="chatMiniText"></span></span>
+    <span id="chatBadge" hidden>0</span>
+  </button>
+  <section id="chatBody" aria-label="سجل المحادثة" hidden><div id="chatMessages" aria-live="polite"></div><form id="chatForm"><label class="sr-only" for="chatInput">اكتب رسالة</label><input id="chatInput" maxlength="240" autocomplete="off" dir="auto" placeholder="اكتب رسالة قصيرة…"><button type="submit">إرسال</button></form></section>
+</div>
 <details id="reactions"><summary aria-label="التفاعلات">😊 تفاعل</summary><div id="emojiReactions">
   <button class="emoji-btn" onclick="sendEmoji('👍')">👍</button>
   <button class="emoji-btn" onclick="sendEmoji('😂')">😂</button>
@@ -70,10 +78,11 @@
 <div id="hand" aria-label="أوراقك"></div>
 <div id="gameError" role="alert" hidden></div>
 <script src="room-config.js?v=20261018-rooms1"></script>
-<script src="room-client.js?v=20261018-turns1"></script>
+<script src="room-client.js?v=20261019-phase3-5"></script>
 <script src="game-sound.js?v=20261018-phase2-1"></script>
 <script src="game-motion.js?v=20261018-phase2-1"></script>
+<script src="game-chat.js?v=20261019-phase3-2"></script>
 <script src="game-boot.js?v=20261018-rooms2"></script>
-<script src="game-lobby.js?v=20261018-phase2-1"></script>
+<script src="game-lobby.js?v=20261019-phase3-2"></script>
 </body>
 </html>

@@ -8,7 +8,7 @@
   if(loading)return;const playerName=nameField.value.trim().replace(/\s+/g,' ');if(!playerName){nameField.setCustomValidity('اكتب اسمك قبل الدخول');nameField.reportValidity();nameField.focus();return}nameField.setCustomValidity('');try{sessionStorage.setItem('jackaroo-player-name',playerName)}catch(_){}window.JACKAROO_PLAYER_NAME=playerName;loading=true;window.JACKAROO_MODE=mode;
   for(const name of ['startAI','startFriends','startJoin'])$(name).disabled=true;
   $('startStatus').textContent='جارٍ تجهيز اللوح…';
-  try{await load('three.min.js?v=20261018-rooms1');await load('game.js?v=20261018-phase2-1');$('startMenu').hidden=true;document.body.classList.remove('choosing')}
+  try{await load('three.min.js?v=20261018-rooms1');await load('game.js?v=20261019-phase3-2');$('startMenu').hidden=true;document.body.classList.remove('choosing')}
   catch(e){$('startStatus').textContent=e.message;const retry=document.createElement('button');retry.textContent='إعادة المحاولة';retry.onclick=()=>location.reload();$('startStatus').appendChild(retry)}
  }
  $('startAI').onclick=()=>choose('ai');$('startFriends').onclick=()=>choose('friends');$('startJoin').onclick=()=>choose('join');

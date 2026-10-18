@@ -3,6 +3,7 @@ const RK=['A','2','3','4','5','6','7','8','9','10','J','Q','K'],SU=['♠','♥',
 const HINT={A:'تنزيل أو 1 أو 11',K:'تنزيل أو 13 وتقتل الطريق',Q:'12 خطوة',J:'بدّل بأي دحلة',4:'4 للخلف',5:'5 لأي دحلة',7:'7 على حركتين',10:'10 أو امنع التالي'};
 const SFX=typeof JackarooSound==='undefined'?{play(){},setEnabled(){return true},get enabled(){return true},wake(){}}:JackarooSound;
 const MOTION=typeof JackarooMotion==='undefined'?{describe:m=>({...m,path:[]}),shouldAnimate:()=>false,runCellSequence:(m,a,l,d)=>{d?.();return{cancel(){}}},createQueue:()=>({enqueue(){return false},cancel(){},get busy(){return false}})}:JackarooMotion;
+const CHAT=typeof JackarooChat==='undefined'?{create:()=>({add(){return false},setOpen(){},get open(){return false}})}:JackarooChat;
 const $=i=>document.getElementById(i);
 let gameGeneration=0;const gameTimers=new Set();
 function later(ms,f){const generation=gameGeneration;const id=setTimeout(()=>{gameTimers.delete(id);if(generation===gameGeneration)f()},ms);gameTimers.add(id);return id}
@@ -17,7 +18,7 @@ const playerName=p=>playerNames[p]||CN[p];
 const SEAT_ACCENT=['#247bff','#d92745','#00b879','#f5b83d'];
 
 // ---------- نظام الغرف والدعوات ----------
-let room=null,localSeat=0,isSpectator=false,remoteRevision=0,networkPending=false;
+let room=null,chatUI=null,localSeat=0,isSpectator=false,remoteRevision=0,networkPending=false;
 const roomParam=new URL(location.href).searchParams.get('room');
 function localPlayer(){return localSeat<0?0:localSeat}
 function cpuSeat(p){return !room||room.isHost&&!room.isHuman(p)}
@@ -26,7 +27,7 @@ function connectionStatus(message){$('connection').textContent=message}
 function setSeatPresentation(){const seat=localSeat<0?0:localSeat;document.body.style.setProperty('--seat-accent',SEAT_ACCENT[seat]);document.body.dataset.seat=String(seat);const label=$('seatBadge');if(label){label.hidden=false;label.textContent='مقعدك: '+CN[seat]}camAngleY=-seat*Math.PI/2;updateCamera()}
 function showEmoji(emoji){const el=document.createElement('div');el.className='emoji-float';el.textContent=emoji;el.style.left=(35+Math.random()*30)+'%';document.body.appendChild(el);setTimeout(()=>el.remove(),2000)}
 function roomPlayerEvent(event){const name=event.name||playerName(event.seat);const text=event.type==='leave'?`${name} غادر الغرفة؛ سيتولى الكمبيوتر مقعده`:`انضم ${name} إلى الغرفة واستلم المقعد`;connectionStatus(text);SFX.play(event.type==='leave'?'warning':'join');const note=$('roomNotice');if(note){note.textContent=text;note.hidden=false;setTimeout(()=>note.hidden=true,3800)}}
-function addChatMessage(message){const list=$('chatMessages');if(!list)return;const row=document.createElement('div');row.className='chat-line'+(message.uid===room?.uid?' own':'');const name=document.createElement('b');name.textContent=playerName(message.seat)||'لاعب';name.style.color=HX[message.seat]||'';const body=document.createElement('span');body.textContent=message.text;row.append(name,body);list.appendChild(row);while(list.children.length>40)list.firstElementChild.remove();list.scrollTop=list.scrollHeight;if(message.uid!==room?.uid){SFX.play('chat');if(!$('chatPanel').open){const badge=$('chatBadge');badge.hidden=false;badge.textContent=String((Number(badge.textContent)||0)+1)}}}
+function addChatMessage(message){chatUI?.add({...message,own:message.uid===room?.uid,name:message.name||playerName(message.seat)})}
 async function sendChatMessage(text){if(!room||room.seat<0){connectionStatus('المحادثة متاحة للاعبين داخل الغرفة');return}if(Date.now()-lastChatSend<900){connectionStatus('انتظر لحظة قبل إرسال رسالة أخرى');return}lastChatSend=Date.now();try{await room.sendChat(text)}catch(_){connectionStatus('تعذر إرسال الرسالة')}}
 function toggleSound(){const enabled=SFX.setEnabled(!SFX.enabled),button=$('soundToggle');button.setAttribute('aria-pressed',String(enabled));button.textContent=enabled?'🔊 الصوت':'🔇 صامت';if(enabled)SFX.wake()}
 function sendEmoji(emoji){showEmoji(emoji);if(room)room.sendEmoji(emoji).catch(()=>connectionStatus('تعذر إرسال التفاعل'));$('reactions').open=false}
@@ -256,8 +257,8 @@ function draw(){
   return `<button class="cd${S.sel===i&&S.stage?' on':''}${S.dealt?' dl':''}" data-i="${i}" style="--r:${d*7}deg;--y:${Math.abs(d)*6}px;animation-delay:${i*90}ms;background-image:url(${cu(c)})${S.sel===i&&S.stage>=3?';visibility:hidden':''}" title="${c.r}${c.s}: ${HINT[c.r]||c.r+' خطوات'}" aria-label="${c.r} ${c.s}"></button>`}).join('');S.dealt=0;syncStateToFirebase()}
 document.addEventListener('pointerdown',()=>SFX.wake(),{once:true});
 $('hand').onclick=e=>{const b=e.target.closest('.cd');if(b){SFX.play('tap');pick(+b.dataset.i)}};
+chatUI=CHAT.create({document,panel:$('chatPanel'),toggle:$('chatToggle'),body:$('chatBody'),list:$('chatMessages'),mini:$('chatMini'),miniName:$('chatMiniName'),miniText:$('chatMiniText'),badge:$('chatBadge'),floatLayer:$('chatFloatLayer'),input:$('chatInput'),getName:playerName,getColor:seat=>HX[seat]||HX[0],onNotify:()=>SFX.play('chat')});
 $('chatForm').onsubmit=e=>{e.preventDefault();const input=$('chatInput'),value=input.value.trim();if(!value)return;input.value='';sendChatMessage(value)};
-$('chatPanel').addEventListener('toggle',()=>{if($('chatPanel').open){const badge=$('chatBadge');badge.hidden=true;badge.textContent='0'}});
 $('msg').onclick=e=>{const b=e.target.closest('button');if(!b)return;if(b.dataset.moveIndex!==undefined){const mv=S.moves[+b.dataset.moveIndex];if(mv&&S.turn===localSeat&&!S.busy&&!isSpectator)play(localPlayer(),S.sel,mv);return}if(b.dataset.x)cancel();else optClick(+b.dataset.k)};
 /* ---------- مشهد جاكارو رويال: خامات اللوح والقطع فقط ---------- */
 const cv=$('cv'),ren=new THREE.WebGLRenderer({canvas:cv,antialias:true}),scene=new THREE.Scene(),cam=new THREE.PerspectiveCamera(45,1,.1,300);

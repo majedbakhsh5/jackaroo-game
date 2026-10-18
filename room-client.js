@@ -68,7 +68,7 @@
       }
     }
     seat=seat===undefined?-1:Number(seat);
-    let players={},seatClaimedAt={},latest=null,lastSignature='',revision=0,publishing=false,pendingState=null,stopped=false,connected=false,connectedOnce=false,presenceReady=false,seatHistory={};
+    let players={},seatClaimedAt={},latest=null,lastSignature='',revision=0,publishing=false,pendingState=null,stopped=false,connected=false,connectedOnce=false,presenceReady=false,seatHistory={},chatReady=false;
     for(const owner of Object.values(seats))if(owner)seatClaimedAt[owner]=Date.now();
     for(const [p,owner]of Object.entries(seats))if(owner)seatHistory[owner]=Number(p);
     const watchers=[];
@@ -76,7 +76,7 @@
     const serverTime=fb.database.ServerValue.TIMESTAMP;
     const onError=()=>handlers.onStatus('تعذر الاتصال بالغرفة؛ تحقق من إعدادات Firebase أو الشبكة');
     function watch(path,event,fn,query){const node=query||ref.child(path);node.on(event,fn,onError);const off=()=>node.off(event,fn);watchers.push(off);return off}
-    const hostCommandOffs=[];let selfViewOff=null;
+    const hostCommandOffs=[],seenChat=new Set(),pendingChat=new Set();let selfViewOff=null;
     function installCommands(){if(hostCommandOffs.length||!isHost)return;const accept=async snap=>{const command=snap.val(),sender=snap.key;if(!command||!isHost)return;await ref.child('commands/'+sender).remove().catch(onError);const p=Object.keys(seats).find(k=>seats[k]===sender);if(p===undefined||!players[sender]?.online||command.revision!==revision)return;handlers.onCommand(command,Number(p))};hostCommandOffs.push(watch('commands','child_added',snap=>accept(snap).catch(onError)),watch('commands','child_changed',snap=>accept(snap).catch(onError)))}
     function installSelfView(){if(selfViewOff||isHost)return;selfViewOff=watch(seat<0?'public':'views/'+uid,'value',snap=>{if(snap.exists())handlers.onView(snap.val())})}
     function removeSelfView(){if(selfViewOff){selfViewOff();selfViewOff=null}}
@@ -112,8 +112,9 @@
       async sendChat(text){
         const value=String(text||'').trim().slice(0,240);
         if(!value||!connected) return;
-        const message=ref.child('chat/'+uid).push();
-        await message.set({text:value,at:serverTime});
+        const message=ref.child('chat/'+uid).push(),messageID=uid+'/'+message.key;
+        pendingChat.add(messageID);
+        await message.set({text:value,at:serverTime});const confirmed={id:messageID,text:value,at:Date.now(),live:true,uid,name:String(handlers.name||'').trim().slice(0,18),seat};seenChat.add(messageID);handlers.onChat?.(confirmed);return confirmed
       },
       async start(){
         const tryTakeover=()=>{if(players[hostUID]?.online)return;const mine=Object.keys(seats).find(k=>seats[k]===uid);if(mine&&Number(mine)>0&&connected)ref.child('meta/host').transaction(current=>current===hostUID&&!players[current]?.online?uid:undefined).catch(onError)};
@@ -133,10 +134,7 @@
         const started=Date.now()-1000,emojiTimes=new Map();
         const receive=snap=>{const e=snap.val();if(!e||snap.key===uid||e.at<started||e.at<=(emojiTimes.get(snap.key)||0))return;emojiTimes.set(snap.key,e.at);if(['👍','😂','🔥','😢','🎉'].includes(e.emoji))handlers.onEmoji(e.emoji)};
         watch('emojis','child_added',receive);watch('emojis','child_changed',receive);
-        const chatRef=ref.child('chat');
-        const seenChat=new Set();
-        const receiveChat=(ownerUID,snap)=>{const item=snap.val(),key=ownerUID+'/'+snap.key;if(!item||seenChat.has(key)||typeof item.text!=='string'||item.text.length>240)return;seenChat.add(key);handlers.onChat({text:item.text,at:item.at,uid:ownerUID,seat:Number(Object.keys(seats).find(p=>seats[p]===ownerUID))})};
-        watch('chat','child_added',snap=>{const ownerUID=snap.key,owner=chatRef.child(ownerUID),listener=message=>receiveChat(ownerUID,message);owner.on('child_added',listener);watchers.push(()=>owner.off('child_added',listener));});
+        watch('chat','value',snap=>{const owners=snap.val()||{};for(const [ownerUID,messages]of Object.entries(owners))for(const [messageID,item]of Object.entries(messages||{})){const key=ownerUID+'/'+messageID,at=Number(item?.at),storedSeat=Number(item?.seat),currentSeat=Number(Object.keys(seats).find(p=>seats[p]===ownerUID));if(!item||seenChat.has(key)||pendingChat.has(key)||ownerUID===uid&&chatReady||typeof item.text!=='string'||item.text.length>240||!Number.isFinite(at))continue;seenChat.add(key);handlers.onChat?.({id:key,text:item.text,at,live:chatReady,uid:ownerUID,name:typeof item.name==='string'?item.name.slice(0,18):players[ownerUID]?.name||'',seat:Number.isInteger(storedSeat)&&storedSeat>=0&&storedSeat<4?storedSeat:currentSeat})}chatReady=true});
       },
       async close(){stopped=true;watchers.forEach(fn=>fn());await ownPresence.remove();if(seat>0)await ref.child('seats/'+seat).remove()}
     };

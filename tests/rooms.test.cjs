@@ -2,7 +2,7 @@ const {test}=require('node:test');
 const assert=require('node:assert/strict');
 const fs=require('node:fs'),vm=require('node:vm'),crypto=require('node:crypto');
 const source=fs.readFileSync(require('node:path').join(__dirname,'../room-client.js'),'utf8');
-function memoryDatabase(){
+function memoryDatabase(options={}){
  let data={},writes=0;const listeners=[];
  const clone=v=>v===undefined?null:JSON.parse(JSON.stringify(v));
  const read=(obj,path)=>path.split('/').filter(Boolean).reduce((o,k)=>o?.[k],obj)??null;
@@ -15,12 +15,12 @@ function memoryDatabase(){
   }
  }
  function ref(path=''){return {child:k=>ref(path+'/'+k),once:async()=>snap(path.split('/').pop(),read(data,path)),
-  set:async value=>change(()=>put(data,path,value)),remove:async()=>change(()=>put(data,path,null)),
+  set:async value=>{if(options.rejectChat&&path.includes('/chat/')){const previous=read(data,path);change(()=>put(data,path,value));await Promise.resolve();change(()=>put(data,path,previous));throw new Error('permission_denied')}change(()=>put(data,path,value))},remove:async()=>change(()=>put(data,path,null)),
   update:async updates=>change(()=>{for(const [k,v]of Object.entries(updates))put(data,path+'/'+k,v)}),
   transaction:async fn=>{const next=fn(read(data,path));if(next===undefined)return {committed:false};change(()=>put(data,path,next));return {committed:true}},
   on:(event,fn)=>{listeners.push({path,event,fn});const value=path==='.info/connected'?true:read(data,path);if(event==='value')queueMicrotask(()=>fn(snap(path.split('/').pop(),value)));else if(event==='child_added')for(const [k,v]of Object.entries(value||{}))queueMicrotask(()=>fn(snap(k,v)))},
   off:(event,fn)=>{const i=listeners.findIndex(l=>l.path===path&&l.event===event&&l.fn===fn);if(i>=0)listeners.splice(i,1)},
-  push:()=>{const key='m'+Math.random().toString(36).slice(2);return {set:async value=>change(()=>put(data,path+'/'+key,value))}},
+  push:()=>{const key='m'+Math.random().toString(36).slice(2);return {key,set:value=>ref(path+'/'+key).set(value)}},
   onDisconnect:()=>({remove:async()=>{}})
  }}
  return {ref,setConnected:value=>change(()=>put(data,'.info/connected',value)),get data(){return data},get writes(){return writes}};
@@ -56,9 +56,15 @@ test('a reconnect is reported so the board can reconcile before replaying motion
 });
 test('players who join after the match starts claim an AI seat and exchange room chat',async()=>{
  const db=memoryDatabase(),messages=[];const host=await client(db,'host').connect(null,hooks({onChat:m=>messages.push(m)}));await host.publish(state());await host.start();await flush();
- const guest=await client(db,'late-guest').connect(host.id,hooks({onChat:m=>messages.push(m)}));await guest.start();await flush();assert.equal(guest.seat,1);assert.equal(host.isHuman(1),true);
- await guest.sendChat('مرحبا بالجميع');await flush();assert.equal(messages.length,2);assert(messages.every(m=>m.text==='مرحبا بالجميع'&&m.seat===1));
- await guest.close();await host.close();
+ const guest=await client(db,'late-guest').connect(host.id,{...hooks({onChat:m=>messages.push(m)}),name:'Mona'});await guest.start();await flush();assert.equal(guest.seat,1);assert.equal(host.isHuman(1),true);
+ await guest.sendChat('مرحبا بالجميع');await flush();assert.equal(messages.length,2);assert(messages.every(m=>m.text==='مرحبا بالجميع'&&m.seat===1&&m.name==='Mona'&&m.live===true&&m.id.startsWith('late-guest/')));
+ const stored=db.data.v2rooms[host.id].chat['late-guest'],messageID=Object.keys(stored)[0];await db.ref('v2rooms/'+host.id+'/chat/late-guest/'+messageID).set({...stored[messageID],text:'duplicate replay'});await flush();assert.equal(messages.length,2,'a repeated message key is not delivered twice');
+ const replay=[];const returning=await client(db,'returning-player').connect(host.id,hooks({onChat:m=>replay.push(m)}));await returning.start();await flush();assert.equal(replay.length,1);assert.equal(replay[0].live,false);assert.equal(replay[0].id,'late-guest/'+messageID);
+ await returning.close();await guest.close();await host.close();
+});
+test('a rejected chat write never emits its optimistic local snapshot',async()=>{
+ const db=memoryDatabase({rejectChat:true}),messages=[];const host=await client(db,'host').connect(null,hooks({onChat:m=>messages.push(m)}));await host.start();await flush();
+ await assert.rejects(()=>host.sendChat('لن ترسل'));await flush();assert.equal(messages.length,0);await host.close();
 });
 test('a new player takes over an offline seat and join/leave presence events identify them',async()=>{
  const db=memoryDatabase(),events=[];const host=await client(db,'host').connect(null,hooks({onPlayerEvent:e=>events.push(e)}));await host.publish(state());await host.start();await flush();
