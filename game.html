@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>جاكارو رويال | Obsidian &amp; Gold</title>
 <meta name="robots" content="noindex">
-<link rel="stylesheet" href="game.css?v=20261019-phase3-2">
+<link rel="stylesheet" href="game.css?v=20261019-phase4-1">
 </head>
 <body class="choosing">
 <section id="startMenu" aria-labelledby="startTitle">
@@ -34,6 +34,7 @@
 </div>
 <div id="roomNotice" role="status" aria-live="polite" hidden></div>
 <div id="board"><canvas id="cv" aria-label="لوح جاكارو رويال ثلاثي الأبعاد"></canvas><div id="playerSeats" aria-label="اللاعبون"></div><div id="zoomControls" role="group" aria-label="تكبير اللوح وتصغيره"><button onclick="changeZoom(1.2)" aria-label="تكبير اللوح">＋</button><button onclick="changeZoom(1/1.2)" aria-label="تصغير اللوح">−</button><button onclick="resetCamera()" aria-label="إظهار اللوح كاملاً">ملاءمة</button></div></div>
+<div id="turnWarning" role="timer" aria-live="off" hidden><span id="turnWarningNumber"></span><small id="turnWarningLabel"></small></div>
 <div id="chatFloatLayer" aria-hidden="true"></div>
 
 <div id="msg" aria-live="polite"></div>
@@ -82,7 +83,8 @@
 <script src="game-sound.js?v=20261018-phase2-1"></script>
 <script src="game-motion.js?v=20261018-phase2-1"></script>
 <script src="game-chat.js?v=20261019-phase3-2"></script>
+<script src="game-turn-timer.js?v=20261019-phase4-1"></script>
 <script src="game-boot.js?v=20261018-rooms2"></script>
-<script src="game-lobby.js?v=20261019-phase3-2"></script>
+<script src="game-lobby.js?v=20261019-phase4-1"></script>
 </body>
 </html>

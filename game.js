@@ -4,6 +4,7 @@ const HINT={A:'تنزيل أو 1 أو 11',K:'تنزيل أو 13 وتقتل ال�
 const SFX=typeof JackarooSound==='undefined'?{play(){},setEnabled(){return true},get enabled(){return true},wake(){}}:JackarooSound;
 const MOTION=typeof JackarooMotion==='undefined'?{describe:m=>({...m,path:[]}),shouldAnimate:()=>false,runCellSequence:(m,a,l,d)=>{d?.();return{cancel(){}}},createQueue:()=>({enqueue(){return false},cancel(){},get busy(){return false}})}:JackarooMotion;
 const CHAT=typeof JackarooChat==='undefined'?{create:()=>({add(){return false},setOpen(){},get open(){return false}})}:JackarooChat;
+const TURN=typeof JackarooTurnTimer==='undefined'?null:JackarooTurnTimer;
 const $=i=>document.getElementById(i);
 let gameGeneration=0;const gameTimers=new Set();
 function later(ms,f){const generation=gameGeneration;const id=setTimeout(()=>{gameTimers.delete(id);if(generation===gameGeneration)f()},ms);gameTimers.add(id);return id}
@@ -45,7 +46,7 @@ async function shareGame(){
 }
 function leaveSpectate(){location.href='play.html'}
 async function leaveRoom(){if(room)await room.close().catch(()=>{});location.href='game.html'}
-function snapshotGame(){return {m:S.m,deck:S.deck,hands:S.hands,turn:S.turn,turnAt:S.turnAt,phase:S.phase,starter:S.starter,skip:S.skip,rem:S.rem,exc:S.exc,bp:S.bp??null,bf:S.bf??null,rc:S.rc,started:S.started,log:S.log,over:S.over,busy:S.busy,msg:S.msg||'',motion:S.motion||null}}
+function snapshotGame(){return {m:S.m,deck:S.deck,hands:S.hands,turn:S.turn,turnAt:S.turnAt,turnTimer:S.turnTimer||null,phase:S.phase,starter:S.starter,skip:S.skip,rem:S.rem,exc:S.exc,bp:S.bp??null,bf:S.bf??null,rc:S.rc,started:S.started,log:S.log,over:S.over,busy:S.busy,msg:S.msg||'',motion:S.motion||null}}
 function syncStateToFirebase(){if(room&&room.isHost)room.publish(snapshotGame()).catch(()=>connectionStatus('تعذرت المزامنة؛ تحقق من الاتصال'))}
 function receiveGame(view){
  if(!JackarooRooms.validView(view)||view.revision<=remoteRevision)return;
@@ -53,23 +54,50 @@ function receiveGame(view){
  const animate=!duplicate&&MOTION.shouldAnimate(motion,{initial:!remoteStateReady,reduced:reducedMotion,hidden:document.hidden});
  remoteStateReady=true;if(motion?.id)lastRemoteMotionId=motion.id;
  remoteRevision=view.revision;resetGameTimers();clearRings();if(S.cc)S.cc.remove();
- S={...S,...st,hands:[[],[],[],[]],sel:null,stage:0,opt:null,srcs:[],moves:[],opts:[],cc:null,dealt:0};
+ S={...S,...st,turnTimer:view.turnTimer||null,hands:[[],[],[],[]],sel:null,stage:0,opt:null,srcs:[],moves:[],opts:[],cc:null,dealt:0};
  if(localSeat>=0)S.hands[localSeat]=view.hand||[];
+ restoreSelectedCard();
  if(animate)motionQueue.enqueue(motion);else if(!duplicate||!motionQueue.busy){cancelMotion();}
  networkPending=false;draw();
 }
+function authorizeTimedAction(p,ci,at=Date.now()){
+ if(!TURN||S.phase!=='play')return true;ensureTurnTimer();const timer=S.turnTimer,deadline=S.turnAt+TURN.TURN_MS;
+ if(at<=deadline&&!timer.graceUntil)return true;
+ const selected=timer.selected,selectedIndex=selected?S.hands[p].findIndex((card,index)=>index===selected.index&&card.r===selected.card.r&&card.s===selected.card.s):-1;
+ const outcome=TURN.expire(timer,S,at,selectedIndex>=0&&gen(S.hands[p][selectedIndex],p).length>0);S.turnTimer=outcome.timer;
+ if(outcome.kind==='selected-timeout'){autoSelectedCard(p);return false}
+ if(outcome.kind==='normal-timeout'){cpu(p,true);return false}
+ if(S.turnTimer.resolved)return false;
+ return !!selected&&TURN.sameSelection(S.turnTimer,{index:ci,card:S.hands[p][ci]})&&at<=S.turnTimer.graceUntil
+}
 function commandMove(command,seat){
  if(!room||!room.isHost||S.over||S.busy||S.turn!==seat||!room.isHuman(seat))return;
+ const receivedAt=Date.now();
  const ci=S.hands[seat].findIndex(c=>c.r===command.card?.r&&c.s===command.card?.s);if(ci<0)return;
  if(S.phase==='burn'){if(command.type==='burn')burnCard(ci,seat);return}
  if(S.phase!=='play')return;
  const legal=gen(S.hands[seat][ci],seat);
- if(command.type==='discard'){if(!S.hands[seat].some(c=>gen(c,seat).length))play(seat,ci,null);return}
+ if(command.type==='select'){recordCardSelection(seat,ci,command.active!==false,receivedAt);return}
+ if(!authorizeTimedAction(seat,ci,receivedAt))return;
+ if(S.turnTimer?.graceUntil&&(!S.turnTimer.selected||!TURN.sameSelection(S.turnTimer,{index:ci,card:S.hands[seat][ci]})))return;
+ if(command.type==='discard'){if(!S.hands[seat].some(c=>gen(c,seat).length))play(seat,ci,null,true);return}
  if(command.type!=='play')return;
- const mv=legal.find(m=>moveKey(m)===command.move);if(mv)play(seat,ci,mv);
+ const mv=legal.find(m=>moveKey(m)===command.move);if(mv)play(seat,ci,mv,true);
 }
 const moveKey=m=>JSON.stringify([m.k,m.c,m.i,m.n??null,m.to??null,m.tp??null,m.tj??null]);
-function submitCommand(command){if(networkPending)return;networkPending=true;room.command(command,remoteRevision).catch(()=>{networkPending=false;connectionStatus('تعذر إرسال الحركة')});later(3000,()=>{networkPending=false})}
+function submitCommand(command){if(networkPending)return Promise.resolve(false);networkPending=true;const sent=room.command(command,remoteRevision).then(()=>true).catch(()=>{connectionStatus('تعذر إرسال الحركة');return false}).finally(()=>{networkPending=false});later(3000,()=>{networkPending=false});return sent}
+function ensureTurnTimer(){if(TURN&&S)S.turnTimer=TURN.ensure(S.turnTimer,S);return S?.turnTimer}
+function recordCardSelection(p,ci,active=true,at=Date.now()){
+ if(!TURN||S.phase!=='play'||S.turn!==p)return false;ensureTurnTimer();const card=S.hands[p][ci];if(!card)return false;
+ const selection={index:ci,card,legal:gen(card,p).length>0},before=S.turnTimer;
+ S.turnTimer=active?TURN.select(before,S,selection,at):TURN.clear(before,S,selection,at);
+ const changed=S.turnTimer!==before;if(changed)draw();return changed
+}
+function restoreSelectedCard(){
+ if(!TURN||localSeat<0||S.turn!==localSeat||!S.turnTimer?.selected)return;
+ const selected=S.turnTimer.selected,ci=S.hands[localSeat].findIndex((card,index)=>index===selected.index&&card.r===selected.card.r&&card.s===selected.card.s);
+ if(ci>=0)prepareSelection(ci)
+}
 async function connectRoom(id){
  const result=await JackarooRooms.connect(id,{name:window.JACKAROO_PLAYER_NAME,onStatus:connectionStatus,onView:receiveGame,onCommand:commandMove,onEmoji:showEmoji,onChat:addChatMessage,onPlayerEvent:roomPlayerEvent,onReconnect:()=>{remoteStateReady=false;cancelMotion()},onHostChange:state=>{if(!room?.isHost||!state)return;resetGameTimers();cancelMotion(false);S={...S,...state,busy:state.started?0:1,sel:null,stage:0,opt:null,srcs:[],moves:[],opts:[],cc:null};reconcilePieces();draw();scheduleCPU()},onPlayers:()=>{if(room){for(let p=0;p<4;p++)playerNames[p]=room.nameForSeat(p);connectionStatus(room.isHost?'أنت مضيف الغرفة — الكمبيوتر يدير المقاعد الشاغرة':isSpectator?'الغرفة مكتملة — أنت مشاهد':'متصل بالغرفة — '+playerName(localSeat));scheduleCPU();draw()}}});
  room=result;localSeat=room.seat;isSpectator=localSeat<0;$('roomLeave').hidden=false;
@@ -174,21 +202,22 @@ const keep=c=>({A:9,K:9,J:8,7:7,4:6,Q:5,10:4})[c.r]??+c.r/3;
 function desc(mv){const w=`حجر ${CN[mv.c]}`;let t=mv.k==='out'?`أنزل ${w}`:mv.k==='fwd'?`${w} ${mv.n} خطوة`:mv.k==='back'?`${w} 4 للخلف`:mv.k==='sc'?`${w} اختصار عبر المركز`:`بدّل ${w} مع ${CN[mv.tp]}`;
  if(mv.caps.length)t+=` 💥 أكل ${mv.caps.map(o=>CN[o[0]]).join('، ')}`;return t}
 const log=t=>{S.log.unshift(t);S.log.length=Math.min(S.log.length,7)};
+function beginTurnTimer(){if(typeof TURN!=='undefined'&&TURN)S.turnTimer=TURN.begin(S)}
 function startRound(){if(!S.deck.length){for(const r of RK)for(const s of SU)S.deck.push({r,s});for(let i=51;i>0;i--){const j=Math.random()*(i+1)|0;[S.deck[i],S.deck[j]]=[S.deck[j],S.deck[i]]}S.rc=0;if(S.started){S.starter=(S.starter+3)%4;log(`قائد الجولة الآن: ${playerName(S.starter)}`)}S.started=1}
  SFX.play('deal');
  const n=S.rc===2?5:4;S.rc++;for(let p=0;p<4;p++)for(let k=0;k<n;k++)S.hands[p].push(S.deck.pop());
- S.phase='play';S.turn=S.starter;S.turnAt=Date.now();S.dealt=1;S.sel=null;S.stage=0;S.msg='';log(`وُزّعت الأوراق: ${n} لكل لاعب`);draw();scheduleCPU()}
+ S.phase='play';S.turn=S.starter;S.turnAt=Date.now();beginTurnTimer();S.dealt=1;S.sel=null;S.stage=0;S.msg='';log(`وُزّعت الأوراق: ${n} لكل لاعب`);draw();scheduleCPU()}
 function doExchange(ci){const g=[S.hands[localPlayer()].splice(ci,1)[0]];
  for(let p=1;p<4;p++){const h=S.hands[p];let b=0;h.forEach((c,k)=>{if(keep(c)<keep(h[b]))b=k});g[p]=h.splice(b,1)[0]}
  for(let p=0;p<4;p++)S.hands[(p+2)%4].push(g[p]);
  log(`مررت ${g[0].r}${g[0].s} واستلمت ${g[2].r}${g[2].s} من شريكك`);
- S.phase='play';S.turn=S.starter;S.turnAt=Date.now();S.dealt=1;S.msg='';draw();scheduleCPU()}
+ S.phase='play';S.turn=S.starter;S.turnAt=Date.now();beginTurnTimer();S.dealt=1;S.msg='';draw();scheduleCPU()}
 function nextTurn(p){if(S.hands.every(h=>!h.length)){startRound();return}
  let q=p;for(let k=0;k<4;k++){q=(q+3)%4;if(S.skip[q]){S.skip[q]=0;log(`${playerName(q)} فاته الدور (10)`);continue}if(S.hands[q].length)break}
  if(!S.hands[q].length){nextTurn(q);return}
- S.turn=q;S.turnAt=Date.now();S.msg='';draw();scheduleCPU()}
+ S.turn=q;S.turnAt=Date.now();beginTurnTimer();S.msg='';draw();scheduleCPU()}
 function win(){for(let t=0;t<2;t++)if(home(t)&&home(t+2)){S.over=1;S.phase='over';S.msg=isSpectator?`انتهت اللعبة: فاز ${t?'الأحمر والذهبي':'الأزرق والأخضر'}`:t===localPlayer()%2?'🎉 مبروك! فزت أنت وشريكك':'انتهت اللعبة: فاز الفريق الآخر';SFX.play('win');burst(new THREE.Vector3(0,BT+1,0),0xffd65a,110,.75);ringFx(new THREE.Vector3(0,BT+.2,0),0xffd65a);draw();return true}return false}
-function play(p,ci,mv){if(room&&!room.isHost){submitCommand({type:mv?'play':'discard',card:S.hands[p][ci],move:mv?moveKey(mv):null});return}const cd=S.hands[p][ci];let t=`${playerName(p)}: ${cd.r}${cd.s}`,part=false;S.busy=1;clearRings();
+function play(p,ci,mv,forced=false){if(room&&!room.isHost){submitCommand({type:mv?'play':'discard',card:S.hands[p][ci],move:mv?moveKey(mv):null});return}const human=room?room.isHuman(p):p===localSeat;if(!forced&&human&&!authorizeTimedAction(p,ci))return;const cd=S.hands[p][ci];if(typeof TURN!=='undefined'&&TURN)S.turnTimer=TURN.resolve(S.turnTimer,S);const warning=typeof document==='undefined'?null:document.getElementById('turnWarning');if(warning)warning.hidden=true;let t=`${playerName(p)}: ${cd.r}${cd.s}`,part=false;S.busy=1;clearRings();
  if(!mv)SFX.play('discard');else if(mv.k==='skip')SFX.play('warning');
  const hc=S.cc;S.cc=null;centerCard(cd,p,hc&&hc.mesh);
  S.stage=0;S.opt=null;S.srcs=[];
@@ -199,29 +228,38 @@ function play(p,ci,mv){if(room&&!room.isHost){submitCommand({type:mv?'play':'dis
   else S.hands[p].splice(ci,1)}
  log(t);S.sel=null;S.msg='';draw();
  later(mv?1150:600,()=>{S.busy=0;if(win())return;
-  if(part){if(!cpuSeat(p)){S.msg=`تبقى ${S.rem} خطوات من الـ7`;if(p===localSeat)pick(S.hands[p].findIndex(c=>c.r==='7'));else draw()}else cpu();return}
-  if(S.bp!=null){const q=S.bp;S.bp=null;if(S.hands[q].length){if(!cpuSeat(q)){S.turn=q;S.phase='burn';S.bf=p;S.turnAt=Date.now();S.msg=`طلب ${playerName(p)} منك حرق ورقة؛ اختر ورقة الآن`;SFX.play('warning');draw();return}burnAI(q)}}
+  if(part){if(S.turnTimer?.auto){autoSelectedCard(p);return}if(!cpuSeat(p)){S.msg=`تبقى ${S.rem} خطوات من الـ7`;if(p===localSeat)pick(S.hands[p].findIndex(c=>c.r==='7'));else draw()}else cpu();return}
+  if(S.bp!=null){const q=S.bp;S.bp=null;if(S.hands[q].length){if(!cpuSeat(q)){S.turn=q;S.phase='burn';S.bf=p;S.turnAt=Date.now();beginTurnTimer();S.msg=`طلب ${playerName(p)} منك حرق ورقة؛ اختر ورقة الآن`;SFX.play('warning');draw();return}burnAI(q)}}
   nextTurn(p)})}
-function cpu(p=S.turn,force=false){if(!force)p=S.turn;if((!force&&(!cpuSeat(p)||p===localSeat))||S.over||S.busy||S.phase!=='play')return;let best=null;const tm=p%2,nx=(p+3)%4;
- S.hands[p].forEach((cd,ci)=>{if(S.rem&&cd.r!=='7')return;gen(cd,p).forEach(mv=>{let sc=Math.random()*3;
+function scoreMove(cd,mv,p){const tm=p%2,nx=(p+3)%4;let sc=Math.random()*3;
   if(mv.k==='skip')sc=S.hands[nx].length?8:-20;
   else{const t=S.m.map(a=>a.slice());apply(t,mv);sc+=ev(t,tm);
    if(mv.to>=LN&&mv.from<LN)sc+=120;       /* أولوية 1: المسار الداخلي */
    mv.caps.forEach(o=>sc+=o[0]%2===tm?-90:50);            /* أولوية 2: أكل الخصم وتجنب أكل الفريق */
    if(mv.k==='out')sc+=40;                                /* أولوية 3: الدخول */
    sc-=({J:6,4:3,A:4,K:4})[cd.r]||0}                      /* أولوية 4: إبقاء الأوراق الدفاعية */
-  if(!best||sc>best.sc)best={sc,ci,mv}})});
- if(best)play(p,best.ci,best.mv);else{let b=0;S.hands[p].forEach((c,k)=>{if(keep(c)<keep(S.hands[p][b]))b=k});play(p,b,null)}}
+ return sc}
+function bestMoveForCard(p,ci){const cd=S.hands[p][ci];if(!cd)return null;const mv=TURN.bestAction(gen(cd,p),move=>scoreMove(cd,move,p));return mv?{ci,mv}:null}
+function autoSelectedCard(p){
+ const selected=S.turnTimer?.selected;if(!selected)return false;
+ const ci=S.hands[p].findIndex((card,index)=>index===selected.index&&card.r===selected.card.r&&card.s===selected.card.s),best=bestMoveForCard(p,ci);
+ if(best){play(p,best.ci,best.mv,true);return true}if(!S.hands[p].some(card=>gen(card,p).length)){play(p,Math.max(0,ci),null,true);return true}return false
+}
+function cpu(p=S.turn,force=false){if(!force)p=S.turn;if((!force&&(!cpuSeat(p)||p===localSeat))||S.over||S.busy||S.phase!=='play')return;let best=null;
+ S.hands[p].forEach((cd,ci)=>{if(S.rem&&cd.r!=='7')return;gen(cd,p).forEach(mv=>{const sc=scoreMove(cd,mv,p);if(!best||sc>best.sc)best={sc,ci,mv}})});
+ if(best)play(p,best.ci,best.mv,force);else{let b=0;S.hands[p].forEach((c,k)=>{if(keep(c)<keep(S.hands[p][b]))b=k});play(p,b,null,force)}}
 /* ---------- تدفق اللاعب: ورقة ← حركة (نقرتان) ← حجر ---------- */
 const canMove=()=>S.hands[localPlayer()].some(c=>gen(c,localPlayer()).length),mkey=m=>m.k==='fwd'?'f'+m.n:m.k;
 function lab(o,cd){return o.key==='out'?'إنزال حجر من المقبرة إلى البيت':o.key==='back'?'4 خطوات للخلف':o.key==='swap'?'تبديل حجرك بحجر آخر':o.key==='sc'?'اختصار عبر المركز':o.key==='skip'?'امنع التالي من اللعب (يحرق ورقة)':`${o.n} خطوة`+(cd.r==='7'&&o.n<(S.rem||7)?` · يبقى ${(S.rem||7)-o.n}`:'')}
+function prepareSelection(ci){const cd=S.hands[localPlayer()][ci];if(!cd)return false;S.sel=ci;S.opt=null;S.moves=gen(cd,localPlayer());S.opts=[];S.moves.forEach(m=>{if(!S.opts.some(o=>o.key===mkey(m)))S.opts.push({key:mkey(m),n:m.n})});S.opts.sort((a,b)=>(b.n||0)-(a.n||0));S.stage=S.moves.length?3:0;return !!S.moves.length}
 function pick(ci){if(isSpectator||networkPending||S.busy||S.over||ci<0)return;if(S.phase==='burn'){burnCard(ci);return}if(S.turn!==localSeat)return;
+ if(S.turnTimer?.graceUntil&&S.turnTimer.selected?.index!==ci)return;
  if(S.stage>=3){if(S.cc){S.cc.remove();S.cc=null}clearRings()}
  const cd=S.hands[localPlayer()][ci];if(S.rem&&cd.r!=='7')return;
  if(!canMove()){play(localPlayer(),ci,null);return}
- S.sel=ci;S.opt=null;S.moves=gen(cd,localPlayer());S.opts=[];S.moves.forEach(m=>{if(!S.opts.some(o=>o.key===mkey(m)))S.opts.push({key:mkey(m),n:m.n})});S.opts.sort((a,b)=>(b.n||0)-(a.n||0));
- if(!S.moves.length){S.stage=0;S.sel=null;S.msg='هذه الورقة ما لها حركة، اختر غيرها';draw();return}
- S.stage=3;toCenter(ci);refreshSrc()}
+ if(!prepareSelection(ci)){S.sel=null;S.msg='هذه الورقة ما لها حركة، اختر غيرها';draw();return}
+ if(room&&!room.isHost){toCenter(ci);submitCommand({type:'select',active:true,card:cd}).then(sent=>{if(sent&&S.sel===ci)refreshSrc()});return}else recordCardSelection(localPlayer(),ci,true);
+ toCenter(ci);refreshSrc()}
 function refreshSrc(){clearRings();let ms=S.moves.filter(m=>!S.opt||mkey(m)===S.opt);const sk=ms.find(m=>m.k==='skip');
  if(sk&&(S.opt==='skip'||ms.length===1)){play(localPlayer(),S.sel,sk);return}
  ms=ms.filter(m=>m.k!=='skip');S.srcs=[...new Set(ms.map(m=>MS[m.c][m.i]))];if(ms.length===1||ms.every(m=>m.k==='out')){play(localPlayer(),S.sel,ms[0]);return}
@@ -234,12 +272,29 @@ function selMarble(p,i,auto){const ms=S.moves.filter(m=>m.c===p&&m.i===i&&(!S.op
  clearRings();const seen={};ms.forEach(m=>{const kk=m.k==='swap'?'s'+m.tp+m.tj:m.to;if(!seen[kk]){seen[kk]=1;addRing(m)}});
  S.stage=4;S.msg=S.opts.length>1&&!S.opt?'اختر الوجهة (أو نوع الحركة)':'اختر الوجهة';draw()}
 function optClick(k){if(S.busy)return;const o=S.opts[k];S.opt=S.opt===o.key?null:o.key;refreshSrc()}
-function cancel(){if(S.cc){S.cc.remove();S.cc=null}clearRings();S.srcs=[];S.opt=null;S.sel=null;S.stage=0;S.msg='';draw()}
+function cancel(){if(S.turnTimer?.graceUntil)return;const ci=S.sel,card=S.hands[localPlayer()][ci];if(card){if(room&&!room.isHost)submitCommand({type:'select',active:false,card});else recordCardSelection(localPlayer(),ci,false)}if(S.cc){S.cc.remove();S.cc=null}clearRings();S.srcs=[];S.opt=null;S.sel=null;S.stage=0;S.msg='';draw()}
 function addRing(mv){const v=mv.k==='swap'?P(mv.tp,S.m[mv.tp][mv.tj],mv.tj):P(mv.c,mv.to,mv.i),r=new THREE.Mesh(RGG,RGM);
  r.rotation.x=-Math.PI/2;r.position.set(v.x,BT+.14,v.z);r.userData.mv=mv;scene.add(r);RG.push(r)}
 function clearRings(){RG.forEach(r=>scene.remove(r));RG=[]}
 function flash(cd){const c=document.createElement('div');c.className='cd cc fl'+(cd.s==='♥'||cd.s==='♦'?' r':'');c.innerHTML=`<b>${cd.r}${cd.s}</b><small>${HINT[cd.r]||cd.r+' خطوات'}</small>`;document.body.appendChild(c);later(1250,()=>c.remove())}
-function startTurnClock(key){if(clockKey!==key){clockKey=key;warnedClockKey=''}if(turnClockHandle)return;turnClockHandle=setInterval(()=>{if(!S||S.over||!S.turnAt)return;const left=Math.max(0,10-Math.floor((Date.now()-S.turnAt)/1000));const el=$('turnClock');el.hidden=false;el.textContent=`${left} ث`;el.classList.toggle('urgent',left<5);const seatTime=$('playerSeats')?.querySelector('.royale-seat.active .seat-time');if(seatTime){seatTime.textContent=`00:${String(left).padStart(2,'0')}`;seatTime.classList.toggle('urgent',left<5)}if(left===5&&warnedClockKey!==clockKey){warnedClockKey=clockKey;SFX.play('warning')}if(left===0&&(room?.isHost||!room)&&(!room||room.isHuman(S.turn))&&!S.busy){const p=S.turn;if(S.phase==='play')cpu(p,true);else if(S.phase==='burn')burnCard(0,p)}},250)}
+function drawTurnWarning(view){const el=$('turnWarning');if(!el)return;el.hidden=!view.visible;if(!view.visible)return;$('turnWarningNumber').textContent=view.seconds;$('turnWarningLabel').textContent=view.label;el.classList.toggle('danger',view.seconds<=2);el.classList.toggle('grace',view.mode==='grace')}
+function startTurnClock(key){
+ if(clockKey!==key){clockKey=key;warnedClockKey=''}if(turnClockHandle)return;
+ turnClockHandle=setInterval(()=>{
+  const warning=$('turnWarning');if(!S||S.over||!S.turnAt){if(warning)warning.hidden=true;return}
+  ensureTurnTimer();const now=Date.now(),view=TURN.presentation(S.turnTimer,S,now,{viewerSeat:localSeat,connected:!room||room.connected,busy:S.busy,over:S.over});
+  drawTurnWarning(view);const left=view.seconds,el=$('turnClock');el.hidden=false;el.textContent=`${left} ث`;el.classList.toggle('urgent',left<5);
+  const seatTime=$('playerSeats')?.querySelector('.royale-seat.active .seat-time');if(seatTime){seatTime.textContent=`00:${String(left).padStart(2,'0')}`;seatTime.classList.toggle('urgent',left<5)}
+  const warningKey=`${clockKey}:${view.mode}`;if(view.visible&&left===5&&warnedClockKey!==warningKey){warnedClockKey=warningKey;SFX.play('warning')}
+  if((room?.isHost||!room)&&(!room||room.isHuman(S.turn))&&!S.busy){
+   const p=S.turn,selected=S.turnTimer?.selected,ci=selected?S.hands[p].findIndex((card,index)=>index===selected.index&&card.r===selected.card.r&&card.s===selected.card.s):-1;
+   const outcome=TURN.expire(S.turnTimer,S,now,ci>=0&&gen(S.hands[p][ci],p).length>0);S.turnTimer=outcome.timer;
+   if(outcome.kind==='grant-grace'){S.msg='مهلة إضافية: أكمل اختيار الحجر خلال 5 ثوانٍ';draw();return}
+   if(outcome.kind==='selected-timeout'){autoSelectedCard(p);return}
+   if(outcome.kind==='normal-timeout'){if(S.phase==='play')cpu(p,true);else if(S.phase==='burn')burnCard(0,p)}
+  }
+ },250)
+}
 function drawPlayerSeats(){const root=$('playerSeats');if(!root||!S)return;if(!root.children.length)for(let p=0;p<4;p++){const seat=document.createElement('div');seat.className='royale-seat';seat.innerHTML='<span class="seat-avatar" aria-hidden="true"></span><span class="seat-data"><b class="seat-name"></b><small class="seat-detail"></small></span><span class="seat-time"></span>';root.appendChild(seat)}
  for(let p=0;p<4;p++){const seat=root.children[p],positions=['br','bl','tl','tr'];seat.className='royale-seat '+positions[(p-localSeat+4)%4]+(S.turn===p&&!S.over?' active':'');seat.style.setProperty('--seat-tone',HX[p]);seat.querySelector('.seat-avatar').textContent=CN[p].charAt(0);seat.querySelector('.seat-name').textContent=playerName(p);seat.querySelector('.seat-detail').textContent=`${S.m[p].filter(r=>r>=LN).length} / 4 في الأمان${p===localSeat?' · أنت':''}`;seat.querySelector('.seat-time').textContent=S.turn===p&&!S.over?'00:10':'♛'}}
 function draw(){
@@ -471,7 +526,7 @@ function runMotion(motion,done){
 }
 function anim(motion){motionQueue.enqueue(motion)}
 motionQueue=MOTION.createQueue(runMotion);
-function newGame(start=true){if(room&&!room.isHost)return;if(start){$('top').querySelector('button').hidden=false;$('startMatch').hidden=true;$('invitePanel').open=false;}networkPending=false;resetGameTimers();cancelMotion(false);clearRings();TW=[];PS.forEach(q=>{scene.remove(q.pt);q.pt.geometry.dispose();q.pt.material.dispose()});PS=[];FX.forEach(q=>{scene.remove(q.m);q.m.geometry.dispose();q.m.material.dispose()});FX.length=0;PILE.forEach(disposeCard);PILE.length=0;if(S&&S.cc)S.cc.remove();S={m:[0,1,2,3].map(()=>[Y,Y,Y,Y]),deck:[],hands:[[],[],[],[]],turn:0,turnAt:Date.now(),phase:'xchg',starter:3,rc:0,started:0,skip:[0,0,0,0],rem:0,exc:-1,bp:null,sel:null,stage:0,opt:null,srcs:[],moves:[],opts:[],log:[],msg:'',busy:0,over:0,dealt:1,cc:null,motion:null};
+function newGame(start=true){if(room&&!room.isHost)return;if(start){$('top').querySelector('button').hidden=false;$('startMatch').hidden=true;$('invitePanel').open=false;}networkPending=false;resetGameTimers();cancelMotion(false);clearRings();const warning=typeof document==='undefined'?null:document.getElementById('turnWarning');if(warning)warning.hidden=true;TW=[];PS.forEach(q=>{scene.remove(q.pt);q.pt.geometry.dispose();q.pt.material.dispose()});PS=[];FX.forEach(q=>{scene.remove(q.m);q.m.geometry.dispose();q.m.material.dispose()});FX.length=0;PILE.forEach(disposeCard);PILE.length=0;if(S&&S.cc)S.cc.remove();S={m:[0,1,2,3].map(()=>[Y,Y,Y,Y]),deck:[],hands:[[],[],[],[]],turn:0,turnAt:Date.now(),turnTimer:null,phase:'xchg',starter:3,rc:0,started:0,skip:[0,0,0,0],rem:0,exc:-1,bp:null,sel:null,stage:0,opt:null,srcs:[],moves:[],opts:[],log:[],msg:'',busy:0,over:0,dealt:1,cc:null,motion:null};if(typeof TURN!=='undefined'&&TURN)S.turnTimer=TURN.begin(S);
  for(let p=0;p<4;p++)for(let i=0;i<4;i++)MS[p][i].position.copy(P(p,Y,i));if(start){drawLeader();startRound()}else{S.phase='play';S.busy=1;S.msg='بانتظار بدء المضيف للمباراة';S.log=[S.msg];draw()}}
 function drawLeader(){const d=[],V={A:14,K:13,Q:12,J:11},v=c=>(V[c.r]||+c.r)*10+SU.indexOf(c.s);
  for(let p=0;p<4;p++){let c;do{c={r:RK[rnd()*13|0],s:SU[rnd()*4|0]}}while(d.some(x=>x.r===c.r&&x.s===c.s));d.push(c)}

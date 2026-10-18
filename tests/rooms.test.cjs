@@ -33,22 +33,23 @@ function client(db,uid){
  const context=vm.createContext({window,document,Uint8Array,Date,Map,Promise,JSON,Number,Object,Array,Error});vm.runInContext(source,context);return window.JackarooRooms;
 }
 const flush=async()=>{for(let i=0;i<15;i++)await new Promise(r=>setImmediate(r))};
-const state=()=>({m:Array.from({length:4},()=>[-100,-100,-100,-100]),hands:[[{r:'A',s:'♠'}],[{r:'K',s:'♥'}],[{r:'2',s:'♦'}],[{r:'3',s:'♣'}]],deck:[{r:'Q',s:'♠'}],turn:1,phase:'play',log:[],msg:'',over:0,busy:0,skip:[0,0,0,0],rem:0,exc:-1});
+const state=()=>({m:Array.from({length:4},()=>[-100,-100,-100,-100]),hands:[[{r:'A',s:'♠'}],[{r:'K',s:'♥'}],[{r:'2',s:'♦'}],[{r:'3',s:'♣'}]],deck:[{r:'Q',s:'♠'}],turn:1,turnAt:1000,phase:'play',turnTimer:{key:'1000:1:play',seat:1,selected:{index:0,card:{r:'K',s:'♥'}},graceUsed:true,graceUntil:16000,resolved:false,auto:false},log:[],msg:'',over:0,busy:0,skip:[0,0,0,0],rem:0,exc:-1});
 function hooks(overrides={}){return {onStatus:()=>{},onView:()=>{},onCommand:()=>{},onEmoji:()=>{},onPlayers:()=>{},...overrides}}
 test('host, guests and spectator receive distinct hands; unchanged state causes no writes',async()=>{
  const db=memoryDatabase(),views=[],commands=[];const host=await client(db,'host').connect(null,hooks({onCommand:(c,p)=>commands.push({c,p})}));await host.publish(state());await host.start();await flush();
  const guests=[];for(let n=1;n<=3;n++){const g=await client(db,'guest'+n).connect(host.id,hooks({onView:v=>views.push({n,v})}));guests.push(g);await g.start();await flush()}
  await host.publish(state());await flush();assert.deepEqual(guests.map(g=>g.seat),[1,2,3]);
  const spectatorViews=[];const spectator=await client(db,'spectator').connect(host.id,hooks({onView:v=>spectatorViews.push(v)}));await spectator.start();await flush();assert.equal(spectator.seat,-1);
- const latest=views.filter(x=>x.n===1).at(-1).v;assert.equal(latest.hand[0].r,'K');assert.equal(latest.state.hands,undefined);assert.equal(latest.state.deck,undefined);assert.equal(spectatorViews.at(-1).hand.length,0);
+ const latest=views.filter(x=>x.n===1).at(-1).v;assert.equal(latest.hand[0].r,'K');assert.equal(latest.state.hands,undefined);assert.equal(latest.state.deck,undefined);assert.equal(latest.state.turnTimer,undefined);assert.equal(latest.turnTimer.selected.card.r,'K');assert.equal(spectatorViews.at(-1).hand.length,0);assert.equal(spectatorViews.at(-1).turnTimer,null);
  const writes=db.writes;await host.publish(state());await flush();assert.equal(db.writes,writes);
  await guests[0].command({type:'play',card:{r:'K',s:'♥'},move:'legal'},latest.revision);await flush();assert.equal(commands.length,1);assert.equal(commands[0].p,1);
- await guests[0].command({type:'play',card:{r:'K',s:'♥'},move:'stale'},latest.revision-1);await flush();assert.equal(commands.length,1);
+ await guests[0].command({type:'select',card:{r:'K',s:'♥'}},latest.revision);await flush();assert.equal(commands.length,2);assert.equal(commands[1].c.type,'select');
+ await guests[0].command({type:'play',card:{r:'K',s:'♥'},move:'stale'},latest.revision-1);await flush();assert.equal(commands.length,2);
  for(const g of guests)await g.close();await spectator.close();await host.close();
 });
 test('a returning host restores its role and the saved game',async()=>{
  const db=memoryDatabase(),api=client(db,'host');const host=await api.connect(null,hooks());await host.publish(state());await host.close();
- const restored=await api.connect(host.id,hooks());assert.equal(restored.isHost,true);assert.equal(restored.seat,0);assert.equal(restored.restored.hands[1][0].r,'K');await restored.close();
+ const restored=await api.connect(host.id,hooks());assert.equal(restored.isHost,true);assert.equal(restored.seat,0);assert.equal(restored.restored.hands[1][0].r,'K');assert.equal(restored.restored.turnTimer.graceUntil,16000);await restored.close();
 });
 test('a reconnect is reported so the board can reconcile before replaying motion',async()=>{
  const db=memoryDatabase();let reconnects=0;const host=await client(db,'host').connect(null,hooks({onReconnect:()=>reconnects++}));await host.start();await flush();

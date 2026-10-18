@@ -3,11 +3,15 @@
   'use strict';
   const SCHEMA = 2;
   function publicState(state) {
-    const {hands,deck,...view}=state;
+    const {hands,deck,turnTimer,...view}=state;
     return {...view,handCounts:hands.map(h=>h.length)};
   }
+  function privateTurnTimer(timer,seat) {
+    if(!timer||timer.seat!==seat)return null;
+    return JSON.parse(JSON.stringify(timer));
+  }
   function createView(state, seat, revision) {
-    return {state:publicState(state),hand:seat<0?[]:(state.hands[seat]||[]),revision};
+    return {state:publicState(state),hand:seat<0?[]:(state.hands[seat]||[]),turnTimer:privateTurnTimer(state.turnTimer,seat),revision};
   }
   function validMotion(motion){
     if(motion==null)return true;
@@ -26,6 +30,7 @@
     if(!Array.isArray(s.log)||s.log.length>7||!s.log.every(t=>typeof t==='string'&&t.length<=600))return false;
     if(typeof s.msg!=='string'||s.msg.length>600)return false;
     if(!validMotion(s.motion))return false;
+    if(view.turnTimer!=null){const t=view.turnTimer;if(!t||typeof t.key!=='string'||t.key.length>80||!Number.isInteger(t.seat)||t.seat<0||t.seat>3||typeof t.graceUsed!=='boolean'||!Number.isFinite(t.graceUntil)||typeof t.resolved!=='boolean'||typeof t.auto!=='boolean')return false}
     const hand=view.hand||[];
     return Array.isArray(hand)&&hand.length<=5&&hand.every(c=>c&&['A','2','3','4','5','6','7','8','9','10','J','Q','K'].includes(c.r)&&['♠','♥','♦','♣'].includes(c.s));
   }
@@ -83,7 +88,7 @@
     const saved=isHost?(await ref.child('hostState').once('value')).val():null;
     let restored=typeof saved==='string'?JSON.parse(saved):null;
     revision=Number((await ref.child('revision').once('value')).val())||0;
-    const api={id,uid,seat,get isHost(){return isHost},get restored(){return restored},
+    const api={id,uid,seat,get isHost(){return isHost},get restored(){return restored},get connected(){return connected},
       nameForSeat:p=>{const owner=seats[p];return owner&&players[owner]?.name?players[owner].name:`الكمبيوتر · ${['الأزرق','الأحمر','الأخضر','الذهبي'][p]}`},
       isHuman:p=>{const owner=seats[p];return !!owner&&(!!players[owner]?.online||Date.now()-(seatClaimedAt[owner]||0)<7000)},
       async publish(state){
