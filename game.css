@@ -79,7 +79,7 @@ button:hover{border-color:var(--seat-accent,var(--ac));background:#1a3042}
  #toolbar{grid-column:1;grid-row:4;direction:rtl;padding:2px 5px;min-height:30px}#toolbar button{min-height:27px;padding:2px 7px}
  #invitePanel{display:none!important}
  #hand{grid-column:1;grid-row:5;flex-direction:row;align-items:flex-start;justify-content:center;height:58px;min-height:0;padding:3px;gap:4px}
- .cd{height:50px;max-height:50px;max-width:38px;flex-shrink:0}.cd:hover,.cd.on{transform:translateY(-4px)}
+ .cd{height:50px;max-height:50px;max-width:38px;flex-shrink:0;transform:rotate(var(--r)) translateY(0)}.cd:hover,.cd.on{transform:translateY(0)}
  #chatBody{bottom:auto;top:40px;right:0;height:min(300px,68vh)}#zoomControls{bottom:5px;left:5px}
 }
 @media(max-width:520px){#chatBody{width:min(340px,calc(100vw - 20px));right:50%;transform:translateX(50%)}}
