@@ -49,3 +49,37 @@ body.choosing>:not(#startMenu):not(script){display:none!important}
 /* Leave room for the fanned card corners above the site footer. */
 @media(max-width:999px) and (min-height:481px){#hand{padding-bottom:18px}}
 @media(max-width:360px){#hud{display:grid;grid-template-columns:1fr 1fr}#top{grid-column:1/-1}.hud-details{width:max-content}#historyPanel{justify-self:end}}
+/* Modern midnight tabletop, with the local player's colour carried through the controls. */
+:root{--bg:#0b121b;--pn:#121e2b;--tx:#edf5f7;--mu:#a9bac6;--ac:#55d7c4;--ln:#365267}
+body{background:radial-gradient(ellipse at 50% 45%,#142231 0,#0b121b 72%)}
+#hud,#toolbar{background:rgba(15,25,37,.96);border-color:#233949}
+button,.hud-details summary,#reactions summary{border-color:#355064;background:#152333;border-radius:10px;transition:border-color .18s,background .18s,transform .18s}
+button:hover{border-color:var(--seat-accent,var(--ac));background:#1a3042}
+#turn b,#seatBadge{color:var(--seat-accent,var(--ac))}
+#seatBadge{justify-self:start;padding:2px 8px;border:1px solid currentColor;border-radius:999px;font-size:11px;white-space:nowrap}
+#top button{background:var(--seat-accent,var(--ac));color:#07151b}
+#chatPanel{position:relative;flex:none;z-index:20}
+#chatPanel>summary{list-style:none;padding:6px 10px;border:1px solid #355064;border-radius:10px;cursor:pointer}
+#chatPanel[open]>summary{color:var(--ac)}#chatBadge{display:inline-grid;place-items:center;min-width:18px;height:18px;margin-inline-start:4px;border-radius:50%;background:var(--ac);color:#06131a;font-size:10px}
+#chatBody{position:absolute;bottom:44px;right:0;width:min(340px,calc(100vw - 20px));height:min(360px,55vh);display:flex;flex-direction:column;padding:10px;background:#111e2b;border:1px solid #3a596e;border-radius:14px;box-shadow:0 16px 42px #000a}
+#chatMessages{flex:1;min-height:0;overflow:auto;display:flex;flex-direction:column;gap:7px;padding:4px}
+.chat-line{display:grid;gap:2px;max-width:88%;align-self:flex-start;padding:7px 10px;border:1px solid #293f50;border-radius:12px 12px 12px 3px;background:#192b3a}
+.chat-line b{font-size:10px;color:var(--seat-accent,var(--ac))}.chat-line span{overflow-wrap:anywhere}.chat-line.own{align-self:flex-end;background:#173339;border-radius:12px 12px 3px 12px}
+#chatForm{display:flex;gap:6px;padding-top:8px}#chatInput{flex:1;min-width:0;min-height:38px;padding:6px 10px;border:1px solid #365267;border-radius:9px;background:#0b151f;color:var(--tx)}#chatForm button{min-height:38px}
+#board{background:radial-gradient(ellipse at center,#233747 0,#101a25 72%,#0b121b 100%)}
+#zoomControls{position:absolute;bottom:8px;left:8px;padding:4px;border:1px solid #466173;border-radius:12px;background:#0c1822d9;backdrop-filter:blur(8px)}
+#zoomControls button{border:0;background:transparent;color:var(--tx)}
+@media(max-height:520px) and (min-width:600px){
+ body:not(.choosing){display:grid;grid-template-columns:minmax(0,1fr);grid-template-rows:auto minmax(0,1fr) auto auto 58px;direction:ltr}
+ #hud{grid-column:1;grid-row:1;direction:rtl;display:flex;align-items:center;justify-content:space-between;gap:7px;padding:3px 8px;border:0;border-bottom:1px solid #233949}
+ #top{display:flex;align-items:center;justify-content:flex-start;gap:8px;flex-wrap:nowrap;min-width:0;font-size:11px}
+ #top button{margin:0;white-space:nowrap}#connection{min-height:0;max-width:24vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+ .hud-details summary,#chatPanel>summary{padding:4px 7px;white-space:nowrap}
+ #board{grid-column:1;grid-row:2;min-height:0}#msg{grid-column:1;grid-row:3;min-height:19px;max-height:48px;padding:0 4px}
+ #toolbar{grid-column:1;grid-row:4;direction:rtl;padding:2px 5px;min-height:30px}#toolbar button{min-height:27px;padding:2px 7px}
+ #invitePanel{display:none!important}
+ #hand{grid-column:1;grid-row:5;flex-direction:row;align-items:flex-start;justify-content:center;height:58px;min-height:0;padding:3px;gap:4px}
+ .cd{height:50px;max-height:50px;max-width:38px;flex-shrink:0}.cd:hover,.cd.on{transform:translateY(-4px)}
+ #chatBody{bottom:auto;top:40px;right:0;height:min(300px,68vh)}#zoomControls{bottom:5px;left:5px}
+}
+@media(max-width:520px){#chatBody{width:min(340px,calc(100vw - 20px));right:50%;transform:translateX(50%)}}

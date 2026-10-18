@@ -20,6 +20,7 @@ function memoryDatabase(){
   transaction:async fn=>{const next=fn(read(data,path));if(next===undefined)return {committed:false};change(()=>put(data,path,next));return {committed:true}},
   on:(event,fn)=>{listeners.push({path,event,fn});const value=path==='.info/connected'?true:read(data,path);if(event==='value')queueMicrotask(()=>fn(snap(path.split('/').pop(),value)));else if(event==='child_added')for(const [k,v]of Object.entries(value||{}))queueMicrotask(()=>fn(snap(k,v)))},
   off:(event,fn)=>{const i=listeners.findIndex(l=>l.path===path&&l.event===event&&l.fn===fn);if(i>=0)listeners.splice(i,1)},
+  push:()=>{const key='m'+Math.random().toString(36).slice(2);return {set:async value=>change(()=>put(data,path+'/'+key,value))}},
   onDisconnect:()=>({remove:async()=>{}})
  }}
  return {ref,get data(){return data},get writes(){return writes}};
@@ -48,4 +49,10 @@ test('host, guests and spectator receive distinct hands; unchanged state causes 
 test('a returning host restores its role and the saved game',async()=>{
  const db=memoryDatabase(),api=client(db,'host');const host=await api.connect(null,hooks());await host.publish(state());await host.close();
  const restored=await api.connect(host.id,hooks());assert.equal(restored.isHost,true);assert.equal(restored.seat,0);assert.equal(restored.restored.hands[1][0].r,'K');await restored.close();
+});
+test('players who join after the match starts claim an AI seat and exchange room chat',async()=>{
+ const db=memoryDatabase(),messages=[];const host=await client(db,'host').connect(null,hooks({onChat:m=>messages.push(m)}));await host.publish(state());await host.start();await flush();
+ const guest=await client(db,'late-guest').connect(host.id,hooks({onChat:m=>messages.push(m)}));await guest.start();await flush();assert.equal(guest.seat,1);assert.equal(host.isHuman(1),true);
+ await guest.sendChat('مرحبا بالجميع');await flush();assert.equal(messages.length,2);assert(messages.every(m=>m.text==='مرحبا بالجميع'&&m.seat===1));
+ await guest.close();await host.close();
 });
