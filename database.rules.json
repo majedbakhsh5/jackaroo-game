@@ -70,6 +70,16 @@
             }
           }
         },
+        "chat": {
+          ".read": "auth != null && root.child('v2rooms').child($room).child('meta/expires').val() > now",
+          "$uid": {
+            "$message": {
+              ".write": "auth != null && auth.uid === $uid && root.child('v2rooms').child($room).child('meta/expires').val() > now && !data.exists() && (root.child('v2rooms').child($room).child('seats/0').val() === auth.uid || root.child('v2rooms').child($room).child('seats/1').val() === auth.uid || root.child('v2rooms').child($room).child('seats/2').val() === auth.uid || root.child('v2rooms').child($room).child('seats/3').val() === auth.uid)",
+              ".validate": "newData.hasChildren(['text','at']) && newData.child('text').isString() && newData.child('text').val().length <= 240 && newData.child('at').isNumber() && newData.child('at').val() <= now",
+              "$other": { ".validate": "$other === 'text' || $other === 'at'" }
+            }
+          }
+        },
         "$other": {
           ".validate": false
         }

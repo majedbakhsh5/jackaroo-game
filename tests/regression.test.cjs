@@ -30,7 +30,7 @@ test('room input validation rejects malformed IDs, board state and card faces',(
 });
 test('complete AI matches preserve board occupancy and finish',()=>{
  const js=source(),engine=js.slice(js.indexOf('const abs='),js.indexOf('/* ---------- تدفق اللاعب'));
- const setup=`const N=76,E=[0,19,38,57],CN=['blue','red','green','gold'],NAME=CN,RK=['A','2','3','4','5','6','7','8','9','10','J','Q','K'],SU=['♠','♥','♦','♣'];let S;let room=null,localSeat=-1,isSpectator=false;const jobs=[];const later=(ms,f)=>jobs.push(f);const cpuSeat=()=>true,localPlayer=()=>0,scheduleCPU=()=>{},draw=()=>{},clearRings=()=>{},anim=()=>{},centerCard=()=>{},pick=()=>{};`;
+ const setup=`const N=76,E=[0,19,38,57],CN=['blue','red','green','gold'],NAME=CN,RK=['A','2','3','4','5','6','7','8','9','10','J','Q','K'],SU=['♠','♥','♦','♣'];let S;let room=null,localSeat=-1,isSpectator=false;const SFX={play(){}};const jobs=[];const later=(ms,f)=>jobs.push(f);const cpuSeat=()=>true,localPlayer=()=>0,scheduleCPU=()=>{},draw=()=>{},clearRings=()=>{},anim=()=>{},centerCard=()=>{},pick=()=>{};`;
  const context=vm.createContext({Math});vm.runInContext(setup+engine+js.slice(js.indexOf('function burnAI('),js.indexOf('function selMarble(')),context);
  const result=vm.runInContext(`let total=0;for(let match=0;match<5;match++){
  S={m:[0,1,2,3].map(()=>[-100,-100,-100,-100]),deck:[],hands:[[],[],[],[]],turn:0,phase:'play',starter:match%4,skip:[0,0,0,0],rem:0,exc:-1,bp:null,sel:null,stage:0,opt:null,srcs:[],log:[],msg:'',busy:0,over:0,cc:null};jobs.length=0;startRound();

@@ -57,7 +57,8 @@
       }
     }
     seat=seat===undefined?-1:Number(seat);
-    let players={},latest=null,lastSignature='',revision=0,publishing=false,pendingState=null,stopped=false,connected=false;
+    let players={},seatClaimedAt={},latest=null,lastSignature='',revision=0,publishing=false,pendingState=null,stopped=false,connected=false;
+    for(const owner of Object.values(seats))if(owner)seatClaimedAt[owner]=Date.now();
     const watchers=[];
     const ownPresence=ref.child('presence/'+uid);
     const serverTime=fb.database.ServerValue.TIMESTAMP;
@@ -66,8 +67,8 @@
     const saved=isHost?(await ref.child('hostState').once('value')).val():null;
     const restored=typeof saved==='string'?JSON.parse(saved):null;
     revision=Number((await ref.child('revision').once('value')).val())||0;
-    const api={id,seat,isHost,restored,
-      isHuman:p=>!!seats[p]&&!!players[seats[p]]?.online,
+    const api={id,uid,seat,isHost,restored,
+      isHuman:p=>{const owner=seats[p];return !!owner&&(!!players[owner]?.online||Date.now()-(seatClaimedAt[owner]||0)<7000)},
       async publish(state){
         if(!isHost||stopped)return;
         pendingState=JSON.parse(JSON.stringify(state));
@@ -91,6 +92,12 @@
         if(!['👍','😂','🔥','😢','🎉'].includes(emoji)||!connected)return;
         await ref.child('emojis/'+uid).set({emoji,at:serverTime});
       },
+      async sendChat(text){
+        const value=String(text||'').trim().slice(0,240);
+        if(!value||!connected) return;
+        const message=ref.child('chat/'+uid).push();
+        await message.set({text:value,at:serverTime});
+      },
       async start(){
         const info=db.ref('.info/connected');
         const onConnect=async snap=>{
@@ -99,7 +106,7 @@
           try{await ownPresence.onDisconnect().remove();await ownPresence.set({online:true,at:serverTime});handlers.onStatus(isHost?'أنت مضيف الغرفة':seat<0?'وضع المشاهدة':'متصل بالغرفة')}catch(e){onError()}
         };
         info.on('value',onConnect);watchers.push(()=>info.off('value',onConnect));
-        watch('seats','value',snap=>{seats=snap.val()||{};if(isHost&&latest)api.publish(latest).catch(onError);handlers.onPlayers()});
+        watch('seats','value',snap=>{const next=snap.val()||{};for(const owner of Object.values(next))if(owner&&!seatClaimedAt[owner])seatClaimedAt[owner]=Date.now();seats=next;if(isHost&&latest)api.publish(latest).catch(onError);handlers.onPlayers()});
         watch('presence','value',snap=>{players=snap.val()||{};if(!isHost&&!players[meta.host]?.online)handlers.onStatus('بانتظار عودة مضيف الغرفة');else handlers.onPlayers()});
         if(!isHost)watch(seat<0?'public':'views/'+uid,'value',snap=>{if(snap.exists())handlers.onView(snap.val())});
         if(isHost){
@@ -118,6 +125,10 @@
         const started=Date.now()-1000,emojiTimes=new Map();
         const receive=snap=>{const e=snap.val();if(!e||snap.key===uid||e.at<started||e.at<=(emojiTimes.get(snap.key)||0))return;emojiTimes.set(snap.key,e.at);if(['👍','😂','🔥','😢','🎉'].includes(e.emoji))handlers.onEmoji(e.emoji)};
         watch('emojis','child_added',receive);watch('emojis','child_changed',receive);
+        const chatRef=ref.child('chat');
+        const seenChat=new Set();
+        const receiveChat=(ownerUID,snap)=>{const item=snap.val(),key=ownerUID+'/'+snap.key;if(!item||seenChat.has(key)||typeof item.text!=='string'||item.text.length>240)return;seenChat.add(key);handlers.onChat({text:item.text,at:item.at,uid:ownerUID,seat:Number(Object.keys(seats).find(p=>seats[p]===ownerUID))})};
+        watch('chat','child_added',snap=>{const ownerUID=snap.key,owner=chatRef.child(ownerUID),listener=message=>receiveChat(ownerUID,message);owner.on('child_added',listener);watchers.push(()=>owner.off('child_added',listener));});
       },
       async close(){stopped=true;watchers.forEach(fn=>fn());await ownPresence.remove();if(seat>0)await ref.child('seats/'+seat).remove()}
     };
