@@ -130,32 +130,35 @@ function showHint(){
 
 /* ---------- الإدخال باللمس للدوران ---------- */
 let lastTouch=null;
-cv.addEventListener('touchstart',e=>{
-  if(e.touches.length===1&&camMode===1){
+function setupTouch(){
+  const cv=$('cv');
+  cv.addEventListener('touchstart',e=>{
+    if(e.touches.length===1&&camMode===1){
+      const t=e.touches[0];
+      lastTouch={x:t.clientX,y:t.clientY,tapTime:Date.now()};
+    }
+  },{passive:true});
+
+  cv.addEventListener('touchmove',e=>{
+    if(camMode!==1||!lastTouch)return;
     const t=e.touches[0];
-    lastTouch={x:t.clientX,y:t.clientY,tapTime:Date.now()};
-  }
-},{passive:true});
+    const dx=t.clientX-lastTouch.x;
+    const dy=t.clientY-lastTouch.y;
+    camAngleY+=dx*0.005;
+    camAngleX+=dy*0.005;
+    camAngleX=Math.max(-0.5,Math.min(1.2,camAngleX));
+    lastTouch={x:t.clientX,y:t.clientY,tapTime:lastTouch.tapTime};
+    updateCamera();
+  },{passive:true});
 
-cv.addEventListener('touchmove',e=>{
-  if(camMode!==1||!lastTouch)return;
-  const t=e.touches[0];
-  const dx=t.clientX-lastTouch.x;
-  const dy=t.clientY-lastTouch.y;
-  camAngleY+=dx*0.005;
-  camAngleX+=dy*0.005;
-  camAngleX=Math.max(-0.5,Math.min(1.2,camAngleX));
-  lastTouch={x:t.clientX,y:t.clientY,tapTime:lastTouch.tapTime};
-  updateCamera();
-},{passive:true});
-
-cv.addEventListener('touchend',e=>{
-  if(camMode===1&&lastTouch&&Date.now()-lastTouch.tapTime<200){
-    const t=e.changedTouches[0];
-    handleGameClick(t.clientX,t.clientY);
-  }
-  lastTouch=null;
-},{passive:true});
+  cv.addEventListener('touchend',e=>{
+    if(camMode===1&&lastTouch&&Date.now()-lastTouch.tapTime<200){
+      const t=e.changedTouches[0];
+      handleGameClick(t.clientX,t.clientY);
+    }
+    lastTouch=null;
+  },{passive:true});
+}
 
 /* ---------- دالة النقر على اللعبة ---------- */
 function handleGameClick(cx,cy){
