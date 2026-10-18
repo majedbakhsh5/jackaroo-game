@@ -5,6 +5,11 @@
  const configured=/^ca-pub-\d{16}$/.test(config.client||'')&&config.privacyReady===true;
  if(!configured)return;
  let script,failed=false;
+ window.googlefc=window.googlefc||{};window.googlefc.callbackQueue=window.googlefc.callbackQueue||[];
+ window.googlefc.callbackQueue.push({CONSENT_API_READY:()=>{
+  if(typeof window.googlefc.showRevocationMessage!=='function')return;
+  document.querySelectorAll('[data-consent-settings]').forEach(button=>{button.hidden=false;button.onclick=()=>window.googlefc.callbackQueue.push({CONSENT_API_READY:()=>window.googlefc.showRevocationMessage()})});
+ }});
  function boot(){
   if(script)return;
   script=document.createElement('script');script.async=true;script.crossOrigin='anonymous';
@@ -35,6 +40,8 @@
   if(mobile)unit(banner,config.slotBanner,320,50);
  }
  function ready(){
+  // The AdSense tag also delivers the published consent message on pages without ad units.
+  boot();
   document.querySelectorAll('[data-ad="content"]').forEach(box=>{
    if(validSlot(config.slotContent)&&box.getBoundingClientRect().width>=250)unit(box,config.slotContent);
   });applyLayout();

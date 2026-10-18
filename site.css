@@ -37,3 +37,5 @@ body.mob #bn{display:flex;flex:none;flex-direction:column;justify-content:center
 #pf{white-space:normal;overflow:visible;display:flex;flex-wrap:wrap;justify-content:center;gap:2px 10px;padding:4px 8px;line-height:1.6}#pf a{margin:0;font-size:12px}
 @media(max-width:600px){.top{padding:12px}.top nav{display:flex;flex-wrap:wrap;gap:6px 12px}.top nav a{margin:0;font-size:13px}.foot nav{display:flex;flex-wrap:wrap;justify-content:center;gap:6px 12px}.foot nav a{margin:0}h1{font-size:26px}.lead{font-size:17px}}
 @media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important}}
+
+[data-consent-settings]{font:inherit;font-size:12px;border:0;background:transparent;color:#e6b94d;text-decoration:underline;cursor:pointer;padding:3px 7px}[data-consent-settings][hidden]{display:none}
