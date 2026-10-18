@@ -1,0 +1,79 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+    "v2rooms": {
+      "$room": {
+        "meta": {
+          ".read": "auth != null",
+          ".write": "auth != null && !data.exists() && newData.child('host').val() === auth.uid",
+          ".validate": "newData.hasChildren(['host','schema','created','expires']) && newData.child('schema').val() === 2 && newData.child('created').isNumber() && newData.child('created').val() <= now && newData.child('expires').val() > now && newData.child('expires').val() <= now + 86400000",
+          "$other": {
+            ".validate": "$other === 'host' || $other === 'schema' || $other === 'created' || $other === 'expires'"
+          }
+        },
+        "seats": {
+          ".read": "auth != null && root.child('v2rooms').child($room).child('meta/expires').val() > now",
+          "$seat": {
+            ".write": "auth != null && root.child('v2rooms').child($room).child('meta/expires').val() > now && ($seat === '0' || $seat === '1' || $seat === '2' || $seat === '3') && ((!data.exists() && newData.val() === auth.uid && ($seat !== '0' || auth != null && root.child('v2rooms').child($room).child('meta/host').val() === auth.uid)) || (data.val() === auth.uid && !newData.exists()))",
+            ".validate": "newData.isString() && newData.val() === auth.uid"
+          },
+          ".validate": "(!newData.child('0').exists() || !newData.child('1').exists() || newData.child('0').val() !== newData.child('1').val()) && (!newData.child('0').exists() || !newData.child('2').exists() || newData.child('0').val() !== newData.child('2').val()) && (!newData.child('0').exists() || !newData.child('3').exists() || newData.child('0').val() !== newData.child('3').val()) && (!newData.child('1').exists() || !newData.child('2').exists() || newData.child('1').val() !== newData.child('2').val()) && (!newData.child('1').exists() || !newData.child('3').exists() || newData.child('1').val() !== newData.child('3').val()) && (!newData.child('2').exists() || !newData.child('3').exists() || newData.child('2').val() !== newData.child('3').val())"
+        },
+        "presence": {
+          ".read": "auth != null && root.child('v2rooms').child($room).child('meta/expires').val() > now",
+          "$uid": {
+            ".write": "auth != null && root.child('v2rooms').child($room).child('meta/expires').val() > now && auth.uid === $uid",
+            ".validate": "newData.hasChildren(['online','at']) && newData.child('online').val() === true && newData.child('at').isNumber() && newData.child('at').val() <= now",
+            "$other": {
+              ".validate": "$other === 'online' || $other === 'at'"
+            }
+          }
+        },
+        "hostState": {
+          ".read": "auth != null && root.child('v2rooms').child($room).child('meta/host').val() === auth.uid",
+          ".write": "auth != null && root.child('v2rooms').child($room).child('meta/host').val() === auth.uid",
+          ".validate": "newData.isString() && newData.val().length <= 50000"
+        },
+        "public": {
+          ".read": "auth != null && root.child('v2rooms').child($room).child('meta/expires').val() > now",
+          ".write": "auth != null && root.child('v2rooms').child($room).child('meta/host').val() === auth.uid"
+        },
+        "revision": {
+          ".read": "auth != null && root.child('v2rooms').child($room).child('meta/expires').val() > now",
+          ".write": "auth != null && root.child('v2rooms').child($room).child('meta/host').val() === auth.uid",
+          ".validate": "newData.isNumber() && ((!data.exists() && newData.val() === 1) || newData.val() === data.val() + 1)"
+        },
+        "views": {
+          "$uid": {
+            ".read": "auth != null && root.child('v2rooms').child($room).child('meta/expires').val() > now && (auth.uid === $uid || auth != null && root.child('v2rooms').child($room).child('meta/host').val() === auth.uid)",
+            ".write": "auth != null && root.child('v2rooms').child($room).child('meta/host').val() === auth.uid"
+          }
+        },
+        "commands": {
+          ".read": "auth != null && root.child('v2rooms').child($room).child('meta/host').val() === auth.uid",
+          "$uid": {
+            ".write": "auth != null && ((auth.uid === $uid && auth != null && root.child('v2rooms').child($room).child('meta/expires').val() > now && (root.child('v2rooms').child($room).child('seats/0').val() === auth.uid || root.child('v2rooms').child($room).child('seats/1').val() === auth.uid || root.child('v2rooms').child($room).child('seats/2').val() === auth.uid || root.child('v2rooms').child($room).child('seats/3').val() === auth.uid)) || (auth != null && root.child('v2rooms').child($room).child('meta/host').val() === auth.uid && !newData.exists()))",
+            ".validate": "newData.hasChildren(['type','card','revision','nonce','at']) && (newData.child('type').val() === 'play' || newData.child('type').val() === 'discard' || newData.child('type').val() === 'burn') && newData.child('nonce').isString() && newData.child('nonce').val().length <= 50 && newData.child('revision').isNumber() && newData.child('at').isNumber() && newData.child('at').val() <= now && newData.child('card/r').isString() && newData.child('card/r').val().length <= 2 && newData.child('card/s').isString() && newData.child('card/s').val().length === 1",
+            "$other": {
+              ".validate": "$other === 'type' || $other === 'card' || $other === 'revision' || $other === 'nonce' || $other === 'at' || $other === 'move'"
+            }
+          }
+        },
+        "emojis": {
+          ".read": "auth != null && root.child('v2rooms').child($room).child('meta/expires').val() > now",
+          "$uid": {
+            ".write": "auth != null && root.child('v2rooms').child($room).child('meta/expires').val() > now && auth.uid === $uid",
+            ".validate": "newData.hasChildren(['emoji','at']) && newData.child('at').val() <= now && (!data.exists() || now - data.child('at').val() >= 1000) && (newData.child('emoji').val() === '👍' || newData.child('emoji').val() === '😂' || newData.child('emoji').val() === '🔥' || newData.child('emoji').val() === '😢' || newData.child('emoji').val() === '🎉')",
+            "$other": {
+              ".validate": "$other === 'emoji' || $other === 'at'"
+            }
+          }
+        },
+        "$other": {
+          ".validate": false
+        }
+      }
+    }
+  }
+}
