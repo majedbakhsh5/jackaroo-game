@@ -39,6 +39,19 @@ button{font:inherit}
 .tb{position:fixed;left:0;right:0;pointer-events:none;z-index:3;backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px)}
 #tt{top:0;height:16%;-webkit-mask-image:linear-gradient(#000,transparent);mask-image:linear-gradient(#000,transparent)}
 #tb2{bottom:0;height:14%;-webkit-mask-image:linear-gradient(transparent,#000);mask-image:linear-gradient(transparent,#000)}
+/* أزرار المشاركة والرموز */
+#shareBtn{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(170px + env(safe-area-inset-bottom,0px));z-index:6;background:linear-gradient(135deg,#e6b94d,#c9a227);color:#1a1405;border:0;border-radius:20px;padding:10px 24px;font-size:14px;font-weight:700;cursor:pointer;box-shadow:0 4px 15px rgba(230,185,77,.4);white-space:nowrap}
+#shareBtn:hover{transform:translateX(-50%) scale(1.05)}
+#emojiReactions{position:fixed;right:10px;top:50%;transform:translateY(-50%);z-index:6;display:flex;flex-direction:column;gap:8px}
+.emoji-btn{width:44px;height:44px;border-radius:50%;border:2px solid var(--ln);background:var(--pn);font-size:22px;cursor:pointer;backdrop-filter:blur(4px);transition:transform .2s}
+.emoji-btn:hover{transform:scale(1.2)}
+.emoji-float{position:fixed;font-size:40px;pointer-events:none;z-index:100;animation:floatUp 2s ease-out forwards}
+@keyframes floatUp{0%{opacity:1;transform:translateY(0) scale(1)}100%{opacity:0;transform:translateY(-200px) scale(1.5)}}
+#spectatorMsg{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:10;background:rgba(18,13,10,.95);border:2px solid var(--ac);border-radius:16px;padding:30px 40px;text-align:center;display:none}
+#spectatorMsg h2{color:var(--ac);margin-bottom:15px}
+#spectatorMsg p{color:var(--tx);margin-bottom:20px}
+@media (max-width:768px){#shareBtn{bottom:calc(140px + env(safe-area-inset-bottom,0px));font-size:12px;padding:8px 18px}
+.emoji-btn{width:38px;height:38px;font-size:18px}}
 /* أزرار التحكم */
 #controls{position:fixed;left:10px;bottom:calc(160px + env(safe-area-inset-bottom,0px));z-index:6;display:flex;flex-direction:column;gap:8px;transition:opacity .3s}
 #controls button{background:var(--pn);color:var(--tx);border:1px solid var(--ln);border-radius:8px;padding:8px 12px;font-size:13px;cursor:pointer;backdrop-filter:blur(4px);min-width:70px}
@@ -62,6 +75,21 @@ button{font:inherit}
 <div id="msg"></div>
 <div id="hand"></div>
 
+<!-- أزرار المشاركة والرموز والمشاهدة -->
+<button id="shareBtn" onclick="shareGame()">📤 مشاركة اللعبة</button>
+<div id="emojiReactions">
+  <button class="emoji-btn" onclick="sendEmoji('👍')">👍</button>
+  <button class="emoji-btn" onclick="sendEmoji('😂')">😂</button>
+  <button class="emoji-btn" onclick="sendEmoji('🔥')">🔥</button>
+  <button class="emoji-btn" onclick="sendEmoji('😢')">😢</button>
+  <button class="emoji-btn" onclick="sendEmoji('🎉')">🎉</button>
+</div>
+<div id="spectatorMsg">
+  <h2>👁️ وضع المشاهدة</h2>
+  <p>اللعبة مكتملة العدد!<br>أنت الآن تشاهد اللعبة.</p>
+  <button onclick="leaveSpectate()" style="background:var(--ac);color:#1a1405;border:0;border-radius:8px;padding:10px 20px;font-size:14px;font-weight:700;cursor:pointer"> مغادرة </button>
+</div>
+
 <!-- أزرار التحكم بالدوران -->
 <button id="camToggle" onclick="toggleCameraMode()">🔄 viewpoint</button>
 <div id="controls" style="display:none">
@@ -69,13 +97,216 @@ button{font:inherit}
   <button onclick="showHint()">💡 توضيح</button>
 </div>
 
+<script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-database-compat.js"></script>
 <script src="three.min.js"></script>
 <script>
+// ---------- Firebase ----------
+const firebaseConfig = {
+  apiKey: "AIzaSyA_Zuqe2NURI_puy2B9E8P8A4N__Ldw9lk",
+  authDomain: "jackaro-2bc30.firebaseio.com",
+  databaseURL: "https://jackaro-2bc30-default-rtdb.firebaseio.com",
+  projectId: "jackaro-2bc30",
+  storageBucket: "jackaro-2bc30.firebasestorage.app",
+  messagingSenderId: "800197929082",
+  appId: "1:800197929082:web:d0b145d95c1fb492fef3c3",
+  measurementId: "G-9D5Z8C2G4C"
+};
+
+let database = null;
+let gameRef = null;
+let playersRef = null;
+let emojisRef = null;
+let lastSentState = null;
+let lastEmojiTime = 0;
+
+function initFirebase(){
+  try {
+    database = firebase.database();
+    gameRef = database.ref('rooms/' + roomID);
+    playersRef = gameRef.child('players');
+    emojisRef = gameRef.child('emojis');
+    setupFirebaseListeners();
+    joinRoom();
+  } catch(e) {
+    console.log('Firebase not available:', e.message);
+  }
+}
+
+function joinRoom(){
+  if(!playersRef) return;
+  playersRef.child(playerId).update({
+    joined: Date.now(),
+    isHost: isHost,
+    isSpectator: isSpectator
+  });
+  playersRef.on('value', snap => {
+    if(!snap.exists()) return;
+    const players = snap.val();
+    const count = Object.keys(players).filter(k => !players[k].isSpectator).length;
+    const spectatorCount = Object.keys(players).filter(k => players[k].isSpectator).length;
+    if(!isHost && count >= 4 && !isSpectator){
+      checkSpectatorMode(count);
+    }
+    const el = $('spectatorCount');
+    if(el) el.textContent = spectatorCount;
+  });
+}
+
+function setupFirebaseListeners(){
+  if(!gameRef) return;
+  gameRef.child('state').on('value', snap => {
+    if(isHost || !snap.exists()) return;
+    const remoteState = snap.val();
+    if(remoteState){
+      if(remoteState.m) S.m = remoteState.m;
+      if(remoteState.turn !== undefined) S.turn = remoteState.turn;
+      if(remoteState.phase) S.phase = remoteState.phase;
+      if(remoteState.hands && remoteState.hands[0]) S.hands[0] = remoteState.hands[0];
+      if(remoteState.log) S.log = remoteState.log;
+      if(remoteState.over !== undefined) S.over = remoteState.over;
+      if(remoteState.msg) S.msg = remoteState.msg;
+      draw();
+    }
+  });
+
+  emojisRef.orderByChild('timestamp').limitToLast(5).on('value', snap => {
+    if(!snap.exists()) return;
+    const emojis = snap.val();
+    Object.values(emojis).forEach(e => {
+      if(e.timestamp > (lastEmojiTime || 0)){
+        lastEmojiTime = e.timestamp;
+        const x = window.innerWidth / 2 + (Math.random() - 0.5) * 200;
+        const el = document.createElement('div');
+        el.className = 'emoji-float';
+        el.textContent = e.emoji;
+        el.style.left = x + 'px';
+        el.style.bottom = '200px';
+        document.body.appendChild(el);
+        later(2000, () => el.remove());
+      }
+    });
+  });
+}
+
+function syncStateToFirebase(){
+  if(!gameRef || !isHost) return;
+  const state = {
+    m: S.m,
+    turn: S.turn,
+    phase: S.phase,
+    hands: S.hands,
+    log: S.log,
+    over: S.over,
+    msg: S.msg,
+    lastUpdate: Date.now()
+  };
+  const str = JSON.stringify(state);
+  if(str !== lastSentState){
+    lastSentState = str;
+    gameRef.child('state').set(state);
+  }
+}
+
+function sendEmoji(emoji) {
+  const el = document.createElement('div');
+  el.className = 'emoji-float';
+  el.textContent = emoji;
+  el.style.left = (window.innerWidth / 2 + (Math.random() - 0.5) * 200) + 'px';
+  el.style.bottom = '200px';
+  document.body.appendChild(el);
+  later(2000, () => el.remove());
+
+  if(emojisRef){
+    emojisRef.push({
+      emoji: emoji,
+      player: playerId,
+      timestamp: Date.now()
+    });
+  }
+}
+
+function checkSpectatorMode(playerCount){
+  if(playerCount >= 4 && !isHost){
+    isSpectator = true;
+    $('spectatorMsg').style.display = 'block';
+    $('shareBtn').style.display = 'none';
+    document.body.style.cursor = 'default';
+  }
+}
+
+function leaveSpectate(){
+  isSpectator = false;
+  $('spectatorMsg').style.display = 'none';
+  if(isHost) $('shareBtn').style.display = 'block';
+}
+
 const N=76,E=[0,19,38,57],CN=['الأزرق','الأحمر','الأخضر','الذهبي'],COL=[0x2f78ff,0xe03a2f,0x2fae4f,0xe8b230],HX=['#5b9bff','#ff6a5c','#5fd37d','#f5c451'];
 const NAME=['أنت','الخصم الأيسر','شريكك','الخصم الأيمن'],RK=['A','2','3','4','5','6','7','8','9','10','J','Q','K'],SU=['♠','♥','♦','♣'];
 const HINT={A:'تنزيل أو 1 أو 11',K:'تنزيل أو 13 وتقتل الطريق',Q:'12 خطوة',J:'بدّل بأي دحلة',4:'4 للخلف',5:'5 لأي دحلة',7:'7 على حركتين',10:'10 أو امنع التالي'};
 const $=i=>document.getElementById(i),later=(ms,f)=>setTimeout(f,ms);
 let S,MS=[],RG=[],TW=[],PS=[];
+
+// ---------- نظام الغرف والدعوات ----------
+let roomID = null;
+let isHost = false;
+let isSpectator = false;
+let playerId = localStorage.getItem('playerId') || 'player_' + Math.random().toString(36).substr(2, 9);
+localStorage.setItem('playerId', playerId);
+
+function getURLParam(name){
+  const url = new URL(window.location.href);
+  return url.searchParams.get(name);
+}
+
+roomID = getURLParam('room') || null;
+isHost = !roomID;
+if(isHost && !roomID){
+  roomID = 'room_' + Math.random().toString(36).substr(2, 8);
+  window.history.replaceState({}, '', '?room=' + roomID);
+}
+
+// ---------- مشاركة اللعبة ----------
+function shareGame(){
+  const shareUrl = window.location.href.split('?')[0] + '?room=' + roomID;
+  navigator.clipboard.writeText(shareUrl).then(() => {
+    S.msg = 'تم نسخ الرابط! شاركه عبر واتساب';
+    draw();
+  }).catch(() => {
+    if (navigator.share) {
+      navigator.share({ title: 'جاكارو', text: 'انضم للعب معي:', url: shareUrl });
+    } else {
+      prompt('انسخ الرابط:', shareUrl);
+    }
+  });
+}
+
+// ---------- الرموز التفاعلية ----------
+function sendEmoji(emoji) {
+  const el = document.createElement('div');
+  el.className = 'emoji-float';
+  el.textContent = emoji;
+  el.style.left = (window.innerWidth / 2 + (Math.random() - 0.5) * 200) + 'px';
+  el.style.bottom = '200px';
+  document.body.appendChild(el);
+  later(2000, () => el.remove());
+}
+
+// ---------- وضع المشاهدة ----------
+function checkSpectatorMode(playerCount){
+  if(playerCount >= 4 && !isHost){
+    isSpectator = true;
+    $('spectatorMsg').style.display = 'block';
+    $('shareBtn').style.display = 'none';
+    document.body.style.cursor = 'default';
+  }
+}
+
+function leaveSpectate(){
+  isSpectator = false;
+  $('spectatorMsg').style.display = 'none';
+  if(isHost) $('shareBtn').style.display = 'block';
+}
 
 /* ---------- وضع الكاميرا والدوران ---------- */
 let camMode=0;
@@ -476,6 +707,8 @@ setupTouch();
 function rs(){updateCamera()}
 addEventListener('resize',rs);rs();
 newGame();
+initFirebase();
+syncInterval = setInterval(syncStateToFirebase, 500);
 const clk=new THREE.Clock();
 (function loop(){requestAnimationFrame(loop);const dt=Math.min(clk.getDelta(),.05),t=clk.elapsedTime;
  for(let k=TW.length-1;k>=0;k--){const w=TW[k];if((w.del-=dt)>0)continue;w.e+=dt;const u=Math.min(1,w.e/w.d),s=u<.5?2*u*u:1-2*(1-u)*(1-u);
