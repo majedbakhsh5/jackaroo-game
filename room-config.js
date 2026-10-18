@@ -1,11 +1,10 @@
 window.ROOM_CONFIG = {
-  // Enable only AFTER deploying database.rules.json and enabling Anonymous Auth.
-  enabled: false,
+  enabled: true,
   firebase: {
-    apiKey: "AIzaSyA_Zuqe2NURI_puy2B9E8P8A4N__Ldw9lk",
-    authDomain: "jackaro-2bc30.firebaseapp.com",
-    databaseURL: "https://jackaro-2bc30-default-rtdb.firebaseio.com",
-    projectId: "jackaro-2bc30",
-    appId: "1:800197929082:web:d0b145d95c1fb492fef3c3"
+    apiKey: "AIzaSyCVqdRnF8UEY91eKxCJjFV5OpGReA77aDk",
+    authDomain: "jackaroo-rooms.firebaseapp.com",
+    databaseURL: "https://jackaroo-rooms-default-rtdb.europe-west1.firebasedatabase.app",
+    projectId: "jackaroo-rooms",
+    appId: "1:567515481809:web:45627b0b09d46a68c767f0"
   }
 };
