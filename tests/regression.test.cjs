@@ -20,18 +20,20 @@ test('all HTML inline scripts parse',()=>{
 const rooms=require('../room-client.js');
 test('public room snapshots exclude deck and every private hand',()=>{
  const hands=[[{r:'A',s:'♠'}],[{r:'K',s:'♥'}],[],[]];
- const state={hands,deck:[{r:'J',s:'♣'}],m:Array.from({length:4},()=>[-100,-100,-100,-100]),turn:0,phase:'play',log:[],msg:''};
+ const motion={id:'move-1',at:1000,k:'fwd',c:0,i:0,from:0,to:2,path:[1,2],team:0,captures:[]};
+ const state={hands,deck:[{r:'J',s:'♣'}],m:Array.from({length:4},()=>[-100,-100,-100,-100]),turn:0,phase:'play',log:[],msg:'',motion};
  const spectator=rooms.createView(state,-1,1),guest=rooms.createView(state,1,1);
- assert.equal('hands' in guest.state,false);assert.equal('deck' in guest.state,false);assert.deepEqual(spectator.hand,[]);assert.deepEqual(guest.hand,hands[1]);assert.equal(JSON.stringify(guest).includes('♠'),false);assert.equal(rooms.validView(guest),true);
+ assert.equal('hands' in guest.state,false);assert.equal('deck' in guest.state,false);assert.deepEqual(spectator.hand,[]);assert.deepEqual(guest.hand,hands[1]);assert.deepEqual(guest.state.motion,motion);assert.equal(JSON.stringify(guest).includes('♠'),false);assert.equal(rooms.validView(guest),true);
 });
 test('room input validation rejects malformed IDs, board state and card faces',()=>{
  assert.equal(rooms.validRoom('../rooms'),false);assert.equal(rooms.validRoom('ab'.repeat(12)),true);
  assert.equal(rooms.validView({revision:1,state:{turn:9,phase:'play'},hand:[]}),false);
+ assert.equal(rooms.validView({revision:1,state:{m:Array.from({length:4},()=>[-100,-100,-100,-100]),turn:0,phase:'play',log:[],msg:'',motion:{id:'bad',at:1,k:'fwd',c:0,i:0,from:0,to:2,path:Array(40).fill(1),captures:[]}},hand:[]}),false);
 });
 test('complete AI matches preserve board occupancy and finish',()=>{
  const js=source(),engine=js.slice(js.indexOf('const abs='),js.indexOf('/* ---------- تدفق اللاعب'));
- const setup=`const N=76,E=[0,19,38,57],CN=['blue','red','green','gold'],NAME=CN,RK=['A','2','3','4','5','6','7','8','9','10','J','Q','K'],SU=['♠','♥','♦','♣'];let S;let room=null,localSeat=-1,isSpectator=false;const playerName=p=>CN[p];const SFX={play(){}};const jobs=[];const later=(ms,f)=>jobs.push(f);const cpuSeat=()=>true,localPlayer=()=>0,scheduleCPU=()=>{},draw=()=>{},clearRings=()=>{},anim=()=>{},centerCard=()=>{},pick=()=>{},burst=()=>{},ringFx=()=>{},BT=.4,THREE={Vector3:class{constructor(){}}};`;
- const context=vm.createContext({Math});vm.runInContext(setup+engine+js.slice(js.indexOf('function burnAI('),js.indexOf('function selMarble(')),context);
+ const setup=`const N=76,E=[0,19,38,57],CN=['blue','red','green','gold'],NAME=CN,RK=['A','2','3','4','5','6','7','8','9','10','J','Q','K'],SU=['♠','♥','♦','♣'];let S,motionSerial=0;let room=null,localSeat=-1,isSpectator=false;const playerName=p=>CN[p];const SFX={play(){}};const jobs=[];const later=(ms,f)=>jobs.push(f);const cpuSeat=()=>true,localPlayer=()=>0,scheduleCPU=()=>{},draw=()=>{},clearRings=()=>{},anim=()=>{},centerCard=()=>{},pick=()=>{},burst=()=>{},ringFx=()=>{},BT=.4,THREE={Vector3:class{constructor(){}}};`;
+ const context=vm.createContext({Math,MOTION:require('../game-motion.js')});vm.runInContext(setup+engine+js.slice(js.indexOf('function burnAI('),js.indexOf('function selMarble(')),context);
  const result=vm.runInContext(`let total=0;for(let match=0;match<5;match++){
  S={m:[0,1,2,3].map(()=>[-100,-100,-100,-100]),deck:[],hands:[[],[],[],[]],turn:0,phase:'play',starter:match%4,skip:[0,0,0,0],rem:0,exc:-1,bp:null,sel:null,stage:0,opt:null,srcs:[],log:[],msg:'',busy:0,over:0,cc:null};jobs.length=0;startRound();
  for(let step=0;step<12000&&!S.over;step++){

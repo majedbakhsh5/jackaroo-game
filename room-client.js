@@ -9,6 +9,15 @@
   function createView(state, seat, revision) {
     return {state:publicState(state),hand:seat<0?[]:(state.hands[seat]||[]),revision};
   }
+  function validMotion(motion){
+    if(motion==null)return true;
+    const cell=n=>Number.isInteger(n)&&(n===-100||n>=0&&n<=151||n>=1000&&n<=1003);
+    if(!motion||typeof motion.id!=='string'||motion.id.length<1||motion.id.length>80||!Number.isFinite(motion.at)||!['fwd','back','out','swap','sc'].includes(motion.k))return false;
+    if(!Number.isInteger(motion.c)||motion.c<0||motion.c>3||!Number.isInteger(motion.i)||motion.i<0||motion.i>3||!cell(motion.from))return false;
+    if(!Array.isArray(motion.path)||motion.path.length>13||!motion.path.every(cell))return false;
+    if(!Array.isArray(motion.captures)||motion.captures.length>13||!motion.captures.every(x=>x&&Number.isInteger(x.c)&&x.c>=0&&x.c<4&&Number.isInteger(x.i)&&x.i>=0&&x.i<4&&cell(x.from)))return false;
+    return motion.k==='swap'?Number.isInteger(motion.tp)&&motion.tp>=0&&motion.tp<4&&Number.isInteger(motion.tj)&&motion.tj>=0&&motion.tj<4&&cell(motion.targetFrom)&&cell(motion.to)&&cell(motion.targetTo):cell(motion.to);
+  }
   function validView(view) {
     if(!view||!Number.isInteger(view.revision)||view.revision<1||!view.state)return false;
     const s=view.state;
@@ -16,6 +25,7 @@
     if(!Array.isArray(s.m)||s.m.length!==4||!s.m.every(row=>Array.isArray(row)&&row.length===4&&row.every(n=>Number.isInteger(n)&&(n===-100||n>=0&&n<=151||n>=1000&&n<=1003))))return false;
     if(!Array.isArray(s.log)||s.log.length>7||!s.log.every(t=>typeof t==='string'&&t.length<=600))return false;
     if(typeof s.msg!=='string'||s.msg.length>600)return false;
+    if(!validMotion(s.motion))return false;
     const hand=view.hand||[];
     return Array.isArray(hand)&&hand.length<=5&&hand.every(c=>c&&['A','2','3','4','5','6','7','8','9','10','J','Q','K'].includes(c.r)&&['♠','♥','♦','♣'].includes(c.s));
   }
@@ -58,7 +68,7 @@
       }
     }
     seat=seat===undefined?-1:Number(seat);
-    let players={},seatClaimedAt={},latest=null,lastSignature='',revision=0,publishing=false,pendingState=null,stopped=false,connected=false,presenceReady=false,seatHistory={};
+    let players={},seatClaimedAt={},latest=null,lastSignature='',revision=0,publishing=false,pendingState=null,stopped=false,connected=false,connectedOnce=false,presenceReady=false,seatHistory={};
     for(const owner of Object.values(seats))if(owner)seatClaimedAt[owner]=Date.now();
     for(const [p,owner]of Object.entries(seats))if(owner)seatHistory[owner]=Number(p);
     const watchers=[];
@@ -111,6 +121,7 @@
         const onConnect=async snap=>{
           connected=snap.val()===true;
           if(!connected){handlers.onStatus('انقطع الاتصال؛ لا تغلق الصفحة أثناء إعادة الاتصال');return}
+          if(connectedOnce)handlers.onReconnect?.();else connectedOnce=true;
           try{await ownPresence.onDisconnect().remove();try{await ownPresence.set({online:true,at:serverTime,name:String(handlers.name||'').trim().slice(0,18)})}catch(_){await ownPresence.set({online:true,at:serverTime})}handlers.onStatus(isHost?'أنت مضيف الغرفة':seat<0?'وضع المشاهدة':'متصل بالغرفة');tryTakeover()}catch(e){onError()}
         };
         info.on('value',onConnect);watchers.push(()=>info.off('value',onConnect));

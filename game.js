@@ -2,6 +2,7 @@ const N=76,E=[0,19,38,57],CN=['الأزرق','الأحمر','الأخضر','ال
 const RK=['A','2','3','4','5','6','7','8','9','10','J','Q','K'],SU=['♠','♥','♦','♣'];
 const HINT={A:'تنزيل أو 1 أو 11',K:'تنزيل أو 13 وتقتل الطريق',Q:'12 خطوة',J:'بدّل بأي دحلة',4:'4 للخلف',5:'5 لأي دحلة',7:'7 على حركتين',10:'10 أو امنع التالي'};
 const SFX=typeof JackarooSound==='undefined'?{play(){},setEnabled(){return true},get enabled(){return true},wake(){}}:JackarooSound;
+const MOTION=typeof JackarooMotion==='undefined'?{describe:m=>({...m,path:[]}),shouldAnimate:()=>false,runCellSequence:(m,a,l,d)=>{d?.();return{cancel(){}}},createQueue:()=>({enqueue(){return false},cancel(){},get busy(){return false}})}:JackarooMotion;
 const $=i=>document.getElementById(i);
 let gameGeneration=0;const gameTimers=new Set();
 function later(ms,f){const generation=gameGeneration;const id=setTimeout(()=>{gameTimers.delete(id);if(generation===gameGeneration)f()},ms);gameTimers.add(id);return id}
@@ -9,6 +10,8 @@ function resetGameTimers(){gameGeneration++;gameTimers.forEach(clearTimeout);gam
 
 let S,MS=[],RG=[],TW=[],PS=[];
 let cpuTimer=null,ownTurnBefore=null,lastChatSend=0,turnClockHandle=null,clockKey='',warnedClockKey='';
+let motionSerial=0,motionQueue=null,remoteStateReady=false,lastRemoteMotionId='';
+const reducedMotion=typeof matchMedia==='function'&&matchMedia('(prefers-reduced-motion: reduce)').matches;
 let playerNames=[window.JACKAROO_PLAYER_NAME||'اللاعب · الأزرق','الكمبيوتر · الأحمر','الكمبيوتر · الأخضر','الكمبيوتر · الذهبي'];
 const playerName=p=>playerNames[p]||CN[p];
 const SEAT_ACCENT=['#247bff','#d92745','#00b879','#f5b83d'];
@@ -41,14 +44,17 @@ async function shareGame(){
 }
 function leaveSpectate(){location.href='play.html'}
 async function leaveRoom(){if(room)await room.close().catch(()=>{});location.href='game.html'}
-function snapshotGame(){return {m:S.m,deck:S.deck,hands:S.hands,turn:S.turn,turnAt:S.turnAt,phase:S.phase,starter:S.starter,skip:S.skip,rem:S.rem,exc:S.exc,bp:S.bp??null,bf:S.bf??null,rc:S.rc,started:S.started,log:S.log,over:S.over,busy:S.busy,msg:S.msg||''}}
+function snapshotGame(){return {m:S.m,deck:S.deck,hands:S.hands,turn:S.turn,turnAt:S.turnAt,phase:S.phase,starter:S.starter,skip:S.skip,rem:S.rem,exc:S.exc,bp:S.bp??null,bf:S.bf??null,rc:S.rc,started:S.started,log:S.log,over:S.over,busy:S.busy,msg:S.msg||'',motion:S.motion||null}}
 function syncStateToFirebase(){if(room&&room.isHost)room.publish(snapshotGame()).catch(()=>connectionStatus('تعذرت المزامنة؛ تحقق من الاتصال'))}
 function receiveGame(view){
  if(!JackarooRooms.validView(view)||view.revision<=remoteRevision)return;
- remoteRevision=view.revision;resetGameTimers();clearRings();if(S.cc)S.cc.remove();TW=[];
- const st=view.state;S={...S,...st,hands:[[],[],[],[]],sel:null,stage:0,opt:null,srcs:[],moves:[],opts:[],cc:null,dealt:0};
+ const st=view.state,motion=st.motion,duplicate=!!(motion?.id&&motion.id===lastRemoteMotionId);
+ const animate=!duplicate&&MOTION.shouldAnimate(motion,{initial:!remoteStateReady,reduced:reducedMotion,hidden:document.hidden});
+ remoteStateReady=true;if(motion?.id)lastRemoteMotionId=motion.id;
+ remoteRevision=view.revision;resetGameTimers();clearRings();if(S.cc)S.cc.remove();
+ S={...S,...st,hands:[[],[],[],[]],sel:null,stage:0,opt:null,srcs:[],moves:[],opts:[],cc:null,dealt:0};
  if(localSeat>=0)S.hands[localSeat]=view.hand||[];
- for(let p=0;p<4;p++)for(let i=0;i<4;i++)MS[p][i].position.copy(P(p,S.m[p][i],i));
+ if(animate)motionQueue.enqueue(motion);else if(!duplicate||!motionQueue.busy){cancelMotion();}
  networkPending=false;draw();
 }
 function commandMove(command,seat){
@@ -64,13 +70,13 @@ function commandMove(command,seat){
 const moveKey=m=>JSON.stringify([m.k,m.c,m.i,m.n??null,m.to??null,m.tp??null,m.tj??null]);
 function submitCommand(command){if(networkPending)return;networkPending=true;room.command(command,remoteRevision).catch(()=>{networkPending=false;connectionStatus('تعذر إرسال الحركة')});later(3000,()=>{networkPending=false})}
 async function connectRoom(id){
- const result=await JackarooRooms.connect(id,{name:window.JACKAROO_PLAYER_NAME,onStatus:connectionStatus,onView:receiveGame,onCommand:commandMove,onEmoji:showEmoji,onChat:addChatMessage,onPlayerEvent:roomPlayerEvent,onHostChange:state=>{if(!room?.isHost||!state)return;resetGameTimers();S={...S,...state,busy:state.started?0:1,sel:null,stage:0,opt:null,srcs:[],moves:[],opts:[],cc:null};for(let p=0;p<4;p++)for(let i=0;i<4;i++)MS[p][i].position.copy(P(p,S.m[p][i],i));draw();scheduleCPU()},onPlayers:()=>{if(room){for(let p=0;p<4;p++)playerNames[p]=room.nameForSeat(p);connectionStatus(room.isHost?'أنت مضيف الغرفة — الكمبيوتر يدير المقاعد الشاغرة':isSpectator?'الغرفة مكتملة — أنت مشاهد':'متصل بالغرفة — '+playerName(localSeat));scheduleCPU();draw()}}});
+ const result=await JackarooRooms.connect(id,{name:window.JACKAROO_PLAYER_NAME,onStatus:connectionStatus,onView:receiveGame,onCommand:commandMove,onEmoji:showEmoji,onChat:addChatMessage,onPlayerEvent:roomPlayerEvent,onReconnect:()=>{remoteStateReady=false;cancelMotion()},onHostChange:state=>{if(!room?.isHost||!state)return;resetGameTimers();cancelMotion(false);S={...S,...state,busy:state.started?0:1,sel:null,stage:0,opt:null,srcs:[],moves:[],opts:[],cc:null};reconcilePieces();draw();scheduleCPU()},onPlayers:()=>{if(room){for(let p=0;p<4;p++)playerNames[p]=room.nameForSeat(p);connectionStatus(room.isHost?'أنت مضيف الغرفة — الكمبيوتر يدير المقاعد الشاغرة':isSpectator?'الغرفة مكتملة — أنت مشاهد':'متصل بالغرفة — '+playerName(localSeat));scheduleCPU();draw()}}});
  room=result;localSeat=room.seat;isSpectator=localSeat<0;$('roomLeave').hidden=false;
  setSeatPresentation();
  playerNames[localSeat]=window.JACKAROO_PLAYER_NAME||CN[localSeat];
  $('top').querySelector('button').disabled=!room.isHost;
  const url=new URL(location.href);url.searchParams.set('room',room.id);history.replaceState({},'',url);
- if(room.isHost){if(room.restored){resetGameTimers();S={...S,...room.restored,busy:room.restored.started?0:1,sel:null,stage:0,opt:null,srcs:[],moves:[],opts:[],cc:null};for(let p=0;p<4;p++)for(let i=0;i<4;i++)MS[p][i].position.copy(P(p,S.m[p][i],i));draw()}await room.publish(snapshotGame());scheduleCPU()}
+ if(room.isHost){if(room.restored){resetGameTimers();cancelMotion(false);S={...S,...room.restored,busy:room.restored.started?0:1,sel:null,stage:0,opt:null,srcs:[],moves:[],opts:[],cc:null};reconcilePieces();draw()}await room.publish(snapshotGame());scheduleCPU()}
  else{resetGameTimers();S.busy=1;S.hands=[[],[],[],[]];draw()}
  await room.start();
  const invite=new URL('play.html',location.href);invite.searchParams.set('room',room.id);$('inviteLink').value=invite.href;
@@ -182,12 +188,12 @@ function nextTurn(p){if(S.hands.every(h=>!h.length)){startRound();return}
  S.turn=q;S.turnAt=Date.now();S.msg='';draw();scheduleCPU()}
 function win(){for(let t=0;t<2;t++)if(home(t)&&home(t+2)){S.over=1;S.phase='over';S.msg=isSpectator?`انتهت اللعبة: فاز ${t?'الأحمر والذهبي':'الأزرق والأخضر'}`:t===localPlayer()%2?'🎉 مبروك! فزت أنت وشريكك':'انتهت اللعبة: فاز الفريق الآخر';SFX.play('win');burst(new THREE.Vector3(0,BT+1,0),0xffd65a,110,.75);ringFx(new THREE.Vector3(0,BT+.2,0),0xffd65a);draw();return true}return false}
 function play(p,ci,mv){if(room&&!room.isHost){submitCommand({type:mv?'play':'discard',card:S.hands[p][ci],move:mv?moveKey(mv):null});return}const cd=S.hands[p][ci];let t=`${playerName(p)}: ${cd.r}${cd.s}`,part=false;S.busy=1;clearRings();
- if(!mv)SFX.play('discard');else{let sounded=false;if(mv.k==='out'){SFX.play('home');sounded=true}if(mv.to>=LN){SFX.play('safe');sounded=true}if(mv.caps?.length){SFX.play(mv.caps.some(o=>o[0]%2===p%2)?'teamCapture':'capture');sounded=true}if(!sounded)SFX.play('move')}
+ if(!mv)SFX.play('discard');else if(mv.k==='skip')SFX.play('warning');
  const hc=S.cc;S.cc=null;centerCard(cd,p,hc&&hc.mesh);
  S.stage=0;S.opt=null;S.srcs=[];
  if(!mv){S.hands[p]=[];t=`${playerName(p)}: لا توجد ورقة تُلعب، أُحرقت كل الأوراق`}
  else if(mv.k==='skip'){S.hands[p].splice(ci,1);S.skip[(p+3)%4]=1;S.bp=(p+3)%4;t+=` ← ${playerName((p+3)%4)} يُمنع من اللعب ويحرق ورقة`}
- else{apply(S.m,mv);anim(mv);t+=' '+desc(mv);
+ else{const now=Date.now(),motion=MOTION.describe(mv,`${now.toString(36)}-${++motionSerial}`,now,p%2,S.m);S.motion=motion;apply(S.m,mv);anim(motion);t+=' '+desc(mv);
   if(cd.r==='7'){if(!S.rem)S.exc=mv.i;S.rem=(S.rem||7)-mv.n;if(S.rem>0&&S.hands[p].some(c=>c.r==='7'&&gen(c,p).length))part=true;else{S.rem=0;S.exc=-1;S.hands[p].splice(ci,1)}}
   else S.hands[p].splice(ci,1)}
  log(t);S.sel=null;S.msg='';draw();
@@ -434,17 +440,37 @@ function pawn(p,i){const mat=new THREE.MeshPhysicalMaterial({color:lc(PCOL[p]),t
  [b,h,core,base,r1,r2,rim].forEach(m=>{m.castShadow=m!==core&&m!==rim;m.receiveShadow=true;m.userData=g.userData;g.add(m)});scene.add(g);return g}
 for(let p=0;p<4;p++){MS[p]=[];for(let i=0;i<4;i++)MS[p][i]=pawn(p,i)}
 /* ---------- الحركة والجسيمات ---------- */
-function fly(o,to,d,del,a,cb,rt){TW.push({o,f:o.position.clone(),t:to.clone(),d,del,a,e:0,cb,rt:rt||null,rf:rt?o.rotation.clone():null})}
+function fly(o,to,d,del,a,cb,rt,tag){TW.push({o,f:o.position.clone(),t:to.clone(),d,del,a,e:0,cb,rt:rt||null,rf:rt?o.rotation.clone():null,tag:tag||null})}
 function burst(v,col,n,sz){const g=new THREE.BufferGeometry(),pos=new Float32Array(n*3),vel=[];
  for(let i=0;i<n;i++){pos.set([v.x,v.y,v.z],i*3);vel.push(new THREE.Vector3((Math.random()-.5)*5,Math.random()*4+1,(Math.random()-.5)*5))}
  g.setAttribute('position',new THREE.BufferAttribute(pos,3));
  const pt=new THREE.Points(g,new THREE.PointsMaterial({color:lc(col),size:sz,transparent:true,blending:THREE.AdditiveBlending,depthWrite:false}));scene.add(pt);PS.push({pt,vel,age:0})}
-function anim(mv){const{c,i}=mv;
- if(mv.k==='swap'){[[c,i],[mv.tp,mv.tj]].forEach(([q,j])=>fly(MS[q][j],P(q,S.m[q][j],j),.9,0,2,()=>burst(MS[q][j].position,COL[q],18,.25)));return}
- const caps=mv.caps.map(([a,b])=>({a,b,at:MS[a][b].position.clone()})),mk=MS[c][i];
- fly(mk,P(c,S.m[c][i],i),.7*(mv.k==='sc'?1.4:1),0,mv.k==='sc'?5:2.2,()=>{burst(mk.position,COL[c],14,.22);ringFx(mk.position,COL[c]);caps.forEach(x=>{const teammate=x.a%2===c%2,fxColor=teammate?COL[c]:0xff7a2a;burst(x.at,fxColor,teammate?26:45,.45);if(!teammate)burst(x.at,0xff7a2a,30,.5);ringFx(x.at,fxColor)})});
- caps.forEach(x=>fly(MS[x.a][x.b],P(x.a,Y,x.b),.8,.65,3.2,null))}
-function newGame(start=true){if(room&&!room.isHost)return;if(start){$('top').querySelector('button').hidden=false;$('startMatch').hidden=true;$('invitePanel').open=false;}networkPending=false;resetGameTimers();clearRings();TW=[];PS.forEach(q=>{scene.remove(q.pt);q.pt.geometry.dispose();q.pt.material.dispose()});PS=[];FX.forEach(q=>{scene.remove(q.m);q.m.geometry.dispose();q.m.material.dispose()});FX.length=0;PILE.forEach(disposeCard);PILE.length=0;if(S&&S.cc)S.cc.remove();S={m:[0,1,2,3].map(()=>[Y,Y,Y,Y]),deck:[],hands:[[],[],[],[]],turn:0,turnAt:Date.now(),phase:'xchg',starter:3,rc:0,started:0,skip:[0,0,0,0],rem:0,exc:-1,bp:null,sel:null,stage:0,opt:null,srcs:[],moves:[],opts:[],log:[],msg:'',busy:0,over:0,dealt:1,cc:null};
+function removeMotionTweens(tag){for(let k=TW.length-1;k>=0;k--)if(TW[k].tag===tag)TW.splice(k,1)}
+function reconcilePieces(){if(!S?.m||!MS.length)return;for(let p=0;p<4;p++)for(let i=0;i<4;i++)MS[p][i].position.copy(P(p,S.m[p][i],i))}
+function cancelMotion(reconcile=true){motionQueue?.cancel();if(reconcile)reconcilePieces()}
+function runMotion(motion,done){
+ const tag='motion:'+motion.id;let cancelled=false,stepper=null;
+ const cancel=()=>{cancelled=true;stepper?.cancel();removeMotionTweens(tag)};
+ if(motion.k==='swap'){
+  const swaps=[{c:motion.c,i:motion.i,from:motion.from,to:motion.to},{c:motion.tp,i:motion.tj,from:motion.targetFrom,to:motion.targetTo}];let remaining=swaps.length;
+  swaps.forEach((x,index)=>{const piece=MS[x.c][x.i];piece.position.copy(P(x.c,x.from,x.i));fly(piece,P(x.c,x.to,x.i),.55,index*.025,1.65,()=>{if(cancelled)return;SFX.play('marble');burst(piece.position,COL[x.c],18,.25);ringFx(piece.position,COL[x.c]);if(!--remaining)done()},null,tag)});
+  return{cancel};
+ }
+ const piece=MS[motion.c][motion.i];piece.position.copy(P(motion.c,motion.from,motion.i));
+ motion.captures.forEach(x=>MS[x.c][x.i].position.copy(P(x.c,x.from,x.i)));
+ const finish=()=>{
+  if(cancelled)return;
+  burst(piece.position,COL[motion.c],14,.22);ringFx(piece.position,COL[motion.c]);
+  if(!motion.captures.length){done();return}
+  const teammate=motion.captures.some(x=>x.c%2===motion.team);SFX.play(teammate?'teamCapture':'capture');let remaining=motion.captures.length;
+  motion.captures.forEach(x=>{const captured=MS[x.c][x.i],at=captured.position.clone(),fxColor=x.c%2===motion.team?COL[motion.c]:0xff7a2a;burst(at,fxColor,x.c%2===motion.team?26:45,.45);ringFx(at,fxColor);fly(captured,P(x.c,Y,x.i),.38,0,.75,()=>{if(!cancelled&&!--remaining)done()},null,tag)})
+ };
+ stepper=MOTION.runCellSequence(motion,(cell,index,land)=>fly(piece,P(motion.c,cell,motion.i),.21,0,.46,land,null,tag),()=>SFX.play('marble'),finish);
+ return{cancel};
+}
+function anim(motion){motionQueue.enqueue(motion)}
+motionQueue=MOTION.createQueue(runMotion);
+function newGame(start=true){if(room&&!room.isHost)return;if(start){$('top').querySelector('button').hidden=false;$('startMatch').hidden=true;$('invitePanel').open=false;}networkPending=false;resetGameTimers();cancelMotion(false);clearRings();TW=[];PS.forEach(q=>{scene.remove(q.pt);q.pt.geometry.dispose();q.pt.material.dispose()});PS=[];FX.forEach(q=>{scene.remove(q.m);q.m.geometry.dispose();q.m.material.dispose()});FX.length=0;PILE.forEach(disposeCard);PILE.length=0;if(S&&S.cc)S.cc.remove();S={m:[0,1,2,3].map(()=>[Y,Y,Y,Y]),deck:[],hands:[[],[],[],[]],turn:0,turnAt:Date.now(),phase:'xchg',starter:3,rc:0,started:0,skip:[0,0,0,0],rem:0,exc:-1,bp:null,sel:null,stage:0,opt:null,srcs:[],moves:[],opts:[],log:[],msg:'',busy:0,over:0,dealt:1,cc:null,motion:null};
  for(let p=0;p<4;p++)for(let i=0;i<4;i++)MS[p][i].position.copy(P(p,Y,i));if(start){drawLeader();startRound()}else{S.phase='play';S.busy=1;S.msg='بانتظار بدء المضيف للمباراة';S.log=[S.msg];draw()}}
 function drawLeader(){const d=[],V={A:14,K:13,Q:12,J:11},v=c=>(V[c.r]||+c.r)*10+SU.indexOf(c.s);
  for(let p=0;p<4;p++){let c;do{c={r:RK[rnd()*13|0],s:SU[rnd()*4|0]}}while(d.some(x=>x.r===c.r&&x.s===c.s));d.push(c)}
@@ -453,6 +479,7 @@ function drawLeader(){const d=[],V={A:14,K:13,Q:12,J:11},v=c=>(V[c.r]||+c.r)*10+
 const RC=new THREE.Raycaster(),V2=new THREE.Vector2();
 function hit(e,o){pointerVector(e.clientX,e.clientY);RC.setFromCamera(V2,cam);return RC.intersectObjects(o,true)[0]}
 setupTouch();cv.addEventListener('pointerdown',()=>SFX.wake(),{once:true});
+document.addEventListener('visibilitychange',()=>{if(document.hidden)cancelMotion()});
 
 cv.onpointermove=e=>{if(camMode===1)return;cv.style.cursor=S&&S.stage>=3&&((RG.length&&hit(e,RG))||(hit(e,S.srcs)))?'pointer':'default'};
 function rs(){updateCamera()}

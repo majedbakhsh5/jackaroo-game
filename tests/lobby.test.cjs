@@ -18,6 +18,6 @@ test('selecting a mode loads the game once and prevents duplicate starts',async(
 });
 test('an unstarted friends room has no cards, no running turns and a serializable snapshot',()=>{
  const js=fs.readFileSync('game.js','utf8');const init=js.slice(js.indexOf('function newGame('),js.indexOf('function drawLeader('));
- const c=vm.createContext({});vm.runInContext(`let S,room=null,networkPending=false,TW=[],PS=[],FX=[],PILE=[];const Y=-100;const disposeCard=()=>{},resetGameTimers=()=>{},clearRings=()=>{},draw=()=>{},P=()=>{},MS=Array.from({length:4},()=>Array.from({length:4},()=>({position:{copy(){}}})));`+init+'\nnewGame(false);',c);
+ const c=vm.createContext({});vm.runInContext(`let S,room=null,networkPending=false,TW=[],PS=[],FX=[],PILE=[];const Y=-100;const disposeCard=()=>{},resetGameTimers=()=>{},cancelMotion=()=>{},clearRings=()=>{},draw=()=>{},P=()=>{},MS=Array.from({length:4},()=>Array.from({length:4},()=>({position:{copy(){}}})));`+init+'\nnewGame(false);',c);
  assert.equal(vm.runInContext('S.started',c),0);assert.equal(vm.runInContext('S.busy',c),1);assert.equal(vm.runInContext('S.hands.flat().length',c),0);assert.equal(vm.runInContext('S.rc',c),0);
 });

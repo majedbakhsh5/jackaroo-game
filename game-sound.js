@@ -18,7 +18,17 @@
     }catch(_){/* Audio never blocks a move. */}
   }
   const patterns={tap:[[540,0,.055,'triangle',.025]],deal:[[420,0,.07,'sine',.025],[620,.08,.09,'sine',.03]],move:[[330,0,.07,'triangle',.035],[520,.06,.09,'triangle',.035]],capture:[[180,0,.12,'sawtooth',.035],[420,.08,.13,'triangle',.04]],turn:[[660,0,.1,'sine',.03]],warning:[[820,0,.07,'square',.025],[620,.1,.1,'square',.025]],home:[[440,0,.08,'triangle',.03],[620,.1,.13,'triangle',.03]],safe:[[520,0,.1,'sine',.03],[700,.1,.12,'sine',.03],[880,.21,.18,'sine',.03]],teamCapture:[[210,0,.1,'triangle',.03],[360,.1,.14,'sine',.03]],discard:[[260,0,.1,'triangle',.03]],win:[[523,0,.16],[659,.13,.16],[784,.26,.25]],chat:[[720,0,.07,'sine',.025]],join:[[440,0,.09],[660,.09,.13]]};
-  function play(name){(patterns[name]||patterns.tap).forEach(a=>tone(...a));}
+  const marble=[
+    [[760,0,.045,'triangle',.018],[1420,.004,.075,'sine',.012]],
+    [[810,0,.042,'triangle',.017],[1510,.005,.068,'sine',.011]],
+    [[705,0,.048,'triangle',.019],[1330,.006,.08,'sine',.012]],
+    [[785,0,.044,'triangle',.018],[1465,.004,.071,'sine',.011]]
+  ];
+  let marbleIndex=0;
+  function play(name){
+    const pattern=name==='marble'?marble[marbleIndex++%marble.length]:(patterns[name]||patterns.tap);
+    pattern.forEach(a=>tone(...a));
+  }
   function setEnabled(value){enabled=!!value;if(!enabled&&context){context.suspend().catch(()=>{});}else if(enabled&&context&&unlocked)context.resume().catch(()=>{});return enabled;}
   root.JackarooSound={play,setEnabled,get enabled(){return enabled;},wake};
 })(typeof window!=='undefined'?window:globalThis);

@@ -23,7 +23,7 @@ function memoryDatabase(){
   push:()=>{const key='m'+Math.random().toString(36).slice(2);return {set:async value=>change(()=>put(data,path+'/'+key,value))}},
   onDisconnect:()=>({remove:async()=>{}})
  }}
- return {ref,get data(){return data},get writes(){return writes}};
+ return {ref,setConnected:value=>change(()=>put(data,'.info/connected',value)),get data(){return data},get writes(){return writes}};
 }
 function client(db,uid){
  const auth=()=>({currentUser:{uid},setPersistence:async()=>{}});auth.Auth={Persistence:{SESSION:'session'}};
@@ -49,6 +49,10 @@ test('host, guests and spectator receive distinct hands; unchanged state causes 
 test('a returning host restores its role and the saved game',async()=>{
  const db=memoryDatabase(),api=client(db,'host');const host=await api.connect(null,hooks());await host.publish(state());await host.close();
  const restored=await api.connect(host.id,hooks());assert.equal(restored.isHost,true);assert.equal(restored.seat,0);assert.equal(restored.restored.hands[1][0].r,'K');await restored.close();
+});
+test('a reconnect is reported so the board can reconcile before replaying motion',async()=>{
+ const db=memoryDatabase();let reconnects=0;const host=await client(db,'host').connect(null,hooks({onReconnect:()=>reconnects++}));await host.start();await flush();
+ db.setConnected(false);await flush();db.setConnected(true);await flush();assert.equal(reconnects,1);await host.close();
 });
 test('players who join after the match starts claim an AI seat and exchange room chat',async()=>{
  const db=memoryDatabase(),messages=[];const host=await client(db,'host').connect(null,hooks({onChat:m=>messages.push(m)}));await host.publish(state());await host.start();await flush();
