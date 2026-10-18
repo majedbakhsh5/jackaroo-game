@@ -315,14 +315,16 @@ const CAM_TARGET={x:0,y:8,z:0};
 
 function updateCamera(){
   const w=innerWidth, h=innerHeight;
+  const isMobile=w<h*1.5;
   const k=Math.max(1,1.05/(w/h));
+  const dist=isMobile?camDist*1.4:camDist;
   ren.setSize(w,h);
   cam.aspect=w/h;
   const radX=camAngleX, radY=camAngleY;
   cam.position.set(
-    CAM_TARGET.x + camDist*Math.sin(radY)*Math.cos(radX),
-    CAM_TARGET.y + camDist*Math.sin(radX),
-    CAM_TARGET.z + camDist*Math.cos(radY)*Math.cos(radX)
+    CAM_TARGET.x + dist*Math.sin(radY)*Math.cos(radX),
+    CAM_TARGET.y + dist*Math.sin(radX),
+    CAM_TARGET.z + dist*Math.cos(radY)*Math.cos(radX)
   );
   cam.lookAt(CAM_TARGET.x, CAM_TARGET.y, CAM_TARGET.z);
   cam.setViewOffset(w,h,0,h*(w<h?.1:.09),w,h);
