@@ -5,13 +5,15 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>جاكارو ثلاثية الأبعاد</title>
 <meta name="robots" content="noindex">
-<link rel="stylesheet" href="game.css?v=20261018-modern1">
+<link rel="stylesheet" href="game.css?v=20261018-turns1">
 </head>
 <body class="choosing">
 <section id="startMenu" aria-labelledby="startTitle">
   <div class="start-brand">جاكارو <span>ثلاثية الأبعاد</span></div>
   <h1 id="startTitle">كيف تحب أن تلعب؟</h1>
   <p>اختر نمط اللعب، ثم خذ مكانك على اللوح.</p>
+  <label for="playerName">اسمك في اللعبة</label>
+  <input id="playerName" maxlength="18" autocomplete="nickname" placeholder="اكتب اسمك" required>
   <div class="start-options">
     <button id="startJoin" hidden><strong>انضم إلى غرفة الأصدقاء</strong><span>افتح الدعوة والعب معهم</span></button>
     <button id="startFriends"><strong>العب مع الأصدقاء</strong><span>أنشئ غرفة وشارك رابط الدعوة، ثم ابدأ المباراة</span></button>
@@ -20,7 +22,7 @@
   <p id="startStatus" role="status">لا تبدأ المباراة إلا بعد اختيارك.</p>
 </section>
 <div id="hud">
-<div id="top" class="pn"><div id="turn"></div><div id="connection" role="status">لعب فردي ضد الكمبيوتر</div><div id="score"></div><span id="seatBadge" hidden></span><button onclick="newGame()">لعبة جديدة</button></div>
+<div id="top" class="pn"><div id="turn"></div><div id="turnClock" role="timer" aria-live="off" hidden></div><div id="connection" role="status">لعب فردي ضد الكمبيوتر</div><div id="score"></div><span id="seatBadge" hidden></span><button onclick="newGame()">لعبة جديدة</button></div>
 <details id="help" class="hud-details"><summary>قوانين اللعبة</summary>
 <div><b>التعريفات:</b> الدحلة (الحجر): لكل لاعب 4 دحل بلون واحد. المقبرة: مكان الدحل قبل بداية اللعب. البيت: مكان البداية، وفيه تنزل الدحلة من المقبرة (لكل لاعب بيت). النهاية: نقطة الفوز، 4 خانات يجب وضع الدحل الأربع فيها.<br>
 <b>السير:</b> حركة الدحل باتجاه عقارب الساعة وورقة الـ4 وحدها عكسه، أما الأدوار فتدور عكس عقارب الساعة (أنت ثم الذهبي ثم الأخضر ثم الأحمر). كل لاعبين متقابلين فريق، ومن أدخل دحله الأربع في النهاية يلعب لشريكه حتى يفوز.<br>
@@ -30,6 +32,7 @@
 <b>الأوراق:</b> 2 و3 و6 و8 و9: بقيمتها · 4: أربع خطوات للخلف · 5: تحرّك بها أي دحلة على اللوح لك أو لغيرك خمس خطوات · 7: سبع خطوات بدحلة واحدة، أو دحلتين بأي توزيع مجموعه 7 · 10: عشر خطوات، أو تمنع اللاعب التالي من اللعب فيرمي ورقة بلا لعب · J: تبدّل دحلتك بأي دحلة أخرى على اللوح إلا الواقفة في بيت صاحبها · Q: 12 خطوة · K: تنزيل دحلة، أو 13 خطوة تقتل بها كل ما في طريقك حتى دحلتك، إلا الواقفة في بيت صاحبها · A: تنزيل دحلة، أو خطوة، أو 11.</div></details>
 <details class="hud-details" id="historyPanel"><summary>السجل</summary><div id="log"></div></details>
 </div>
+<div id="roomNotice" role="status" aria-live="polite" hidden></div>
 <div id="board"><canvas id="cv" aria-label="لوح جاكارو ثلاثي الأبعاد"></canvas><div id="zoomControls" role="group" aria-label="تكبير اللوح وتصغيره"><button onclick="changeZoom(1.2)" aria-label="تكبير اللوح">＋</button><button onclick="changeZoom(1/1.2)" aria-label="تصغير اللوح">−</button><button onclick="resetCamera()" aria-label="إظهار اللوح كاملاً">ملاءمة</button></div></div>
 
 <div id="msg" aria-live="polite"></div>
@@ -67,9 +70,9 @@
 <div id="hand" aria-label="أوراقك"></div>
 <div id="gameError" role="alert" hidden></div>
 <script src="room-config.js?v=20261018-rooms1"></script>
-<script src="room-client.js?v=20261018-modern1"></script>
-<script src="game-sound.js?v=20261018-modern1"></script>
+<script src="room-client.js?v=20261018-turns1"></script>
+<script src="game-sound.js?v=20261018-turns1"></script>
 <script src="game-boot.js?v=20261018-rooms2"></script>
-<script src="game-lobby.js?v=20261018-modern1"></script>
+<script src="game-lobby.js?v=20261018-turns1"></script>
 </body>
 </html>

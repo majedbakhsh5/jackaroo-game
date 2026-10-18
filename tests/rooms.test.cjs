@@ -56,3 +56,16 @@ test('players who join after the match starts claim an AI seat and exchange room
  await guest.sendChat('مرحبا بالجميع');await flush();assert.equal(messages.length,2);assert(messages.every(m=>m.text==='مرحبا بالجميع'&&m.seat===1));
  await guest.close();await host.close();
 });
+test('a new player takes over an offline seat and join/leave presence events identify them',async()=>{
+ const db=memoryDatabase(),events=[];const host=await client(db,'host').connect(null,hooks({onPlayerEvent:e=>events.push(e)}));await host.publish(state());await host.start();await flush();
+ await db.ref('v2rooms/'+host.id+'/seats/1').set('old-offline-player');
+ const guest=await client(db,'new-player').connect(host.id,{...hooks(),name:'Mona',onPlayerEvent:e=>events.push(e)});assert.equal(guest.seat,1);assert.equal(db.data.v2rooms[host.id].seats[1],'new-player');await guest.start();await flush();
+ assert.equal(host.nameForSeat(1),'Mona');assert(events.some(e=>e.type==='join'&&e.seat===1&&e.name==='Mona'));
+ await guest.close();await flush();assert(events.some(e=>e.type==='leave'&&e.seat===1&&e.name==='Mona'));await host.close();
+});
+test('an online guest becomes host and restores the match when the original host leaves',async()=>{
+ const db=memoryDatabase(),promoted=[],views=[];const host=await client(db,'host').connect(null,hooks());await host.publish(state());await host.start();await flush();
+ const guest=await client(db,'guest').connect(host.id,hooks({onHostChange:s=>promoted.push(s),onView:v=>views.push(v)}));await guest.start();await flush();assert.equal(guest.isHost,false);const previousViews=views.length;
+ await host.close();await flush();assert.equal(guest.isHost,true);assert.equal(promoted.length,1);assert.equal(promoted[0].hands[1][0].r,'K');
+ await guest.publish(state());await flush();assert.equal(views.length,previousViews,'the promoted host stops consuming its private view');await guest.close();
+});

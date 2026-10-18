@@ -6,8 +6,8 @@
       "$room": {
         "meta": {
           ".read": "auth != null",
-          ".write": "auth != null && !data.exists() && newData.child('host').val() === auth.uid",
-          ".validate": "newData.hasChildren(['host','schema','created','expires']) && newData.child('schema').val() === 2 && newData.child('created').isNumber() && newData.child('created').val() <= now && newData.child('expires').val() > now && newData.child('expires').val() <= now + 86400000",
+          ".write": "auth != null && ((!data.exists() && newData.child('host').val() === auth.uid) || (data.exists() && newData.child('host').val() === auth.uid && (root.child('v2rooms').child($room).child('seats/1').val() === auth.uid || root.child('v2rooms').child($room).child('seats/2').val() === auth.uid || root.child('v2rooms').child($room).child('seats/3').val() === auth.uid) && !root.child('v2rooms').child($room).child('presence').child(data.child('host').val()).child('online').exists()))",
+          ".validate": "newData.hasChildren(['host','schema','created','expires']) && newData.child('schema').val() === 2 && newData.child('created').isNumber() && newData.child('created').val() <= now && newData.child('expires').val() > now && newData.child('expires').val() <= now + 86400000 && (!data.exists() || (newData.child('schema').val() === data.child('schema').val() && newData.child('created').val() === data.child('created').val() && newData.child('expires').val() === data.child('expires').val() && (newData.child('host').val() === data.child('host').val() || newData.child('host').val() === auth.uid && !root.child('v2rooms').child($room).child('presence').child(data.child('host').val()).child('online').exists())))",
           "$other": {
             ".validate": "$other === 'host' || $other === 'schema' || $other === 'created' || $other === 'expires'"
           }
@@ -15,7 +15,7 @@
         "seats": {
           ".read": "auth != null && root.child('v2rooms').child($room).child('meta/expires').val() > now",
           "$seat": {
-            ".write": "auth != null && root.child('v2rooms').child($room).child('meta/expires').val() > now && ($seat === '0' || $seat === '1' || $seat === '2' || $seat === '3') && ((!data.exists() && newData.val() === auth.uid && ($seat !== '0' || auth != null && root.child('v2rooms').child($room).child('meta/host').val() === auth.uid)) || (data.val() === auth.uid && !newData.exists()))",
+            ".write": "auth != null && root.child('v2rooms').child($room).child('meta/expires').val() > now && ($seat === '0' || $seat === '1' || $seat === '2' || $seat === '3') && ((!data.exists() && newData.val() === auth.uid && ($seat !== '0' || root.child('v2rooms').child($room).child('meta/host').val() === auth.uid)) || (data.exists() && $seat !== '0' && newData.val() === auth.uid && !root.child('v2rooms').child($room).child('presence').child(data.val()).child('online').exists() && data.val() !== auth.uid) || (data.val() === auth.uid && !newData.exists()))",
             ".validate": "newData.isString() && newData.val() === auth.uid"
           },
           ".validate": "(!newData.child('0').exists() || !newData.child('1').exists() || newData.child('0').val() !== newData.child('1').val()) && (!newData.child('0').exists() || !newData.child('2').exists() || newData.child('0').val() !== newData.child('2').val()) && (!newData.child('0').exists() || !newData.child('3').exists() || newData.child('0').val() !== newData.child('3').val()) && (!newData.child('1').exists() || !newData.child('2').exists() || newData.child('1').val() !== newData.child('2').val()) && (!newData.child('1').exists() || !newData.child('3').exists() || newData.child('1').val() !== newData.child('3').val()) && (!newData.child('2').exists() || !newData.child('3').exists() || newData.child('2').val() !== newData.child('3').val())"
@@ -24,9 +24,9 @@
           ".read": "auth != null && root.child('v2rooms').child($room).child('meta/expires').val() > now",
           "$uid": {
             ".write": "auth != null && root.child('v2rooms').child($room).child('meta/expires').val() > now && auth.uid === $uid",
-            ".validate": "newData.hasChildren(['online','at']) && newData.child('online').val() === true && newData.child('at').isNumber() && newData.child('at').val() <= now",
+            ".validate": "newData.hasChildren(['online','at']) && newData.child('online').val() === true && newData.child('at').isNumber() && newData.child('at').val() <= now && (!newData.child('name').exists() || newData.child('name').isString() && newData.child('name').val().length <= 18)",
             "$other": {
-              ".validate": "$other === 'online' || $other === 'at'"
+              ".validate": "$other === 'online' || $other === 'at' || $other === 'name'"
             }
           }
         },
@@ -76,7 +76,9 @@
             "$message": {
               ".write": "auth != null && auth.uid === $uid && root.child('v2rooms').child($room).child('meta/expires').val() > now && !data.exists() && (root.child('v2rooms').child($room).child('seats/0').val() === auth.uid || root.child('v2rooms').child($room).child('seats/1').val() === auth.uid || root.child('v2rooms').child($room).child('seats/2').val() === auth.uid || root.child('v2rooms').child($room).child('seats/3').val() === auth.uid)",
               ".validate": "newData.hasChildren(['text','at']) && newData.child('text').isString() && newData.child('text').val().length <= 240 && newData.child('at').isNumber() && newData.child('at').val() <= now",
-              "$other": { ".validate": "$other === 'text' || $other === 'at'" }
+              "$other": {
+                ".validate": "$other === 'text' || $other === 'at'"
+              }
             }
           }
         },
