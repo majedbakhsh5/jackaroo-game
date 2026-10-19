@@ -6,6 +6,7 @@ const MOTION=typeof JackarooMotion==='undefined'?{describe:m=>({...m,path:[]}),s
 const CHAT=typeof JackarooChat==='undefined'?{create:()=>({add(){return false},setOpen(){},get open(){return false}})}:JackarooChat;
 const TURN=typeof JackarooTurnTimer==='undefined'?null:JackarooTurnTimer;
 const CARDS=typeof JackarooCards==='undefined'?{hand:()=>[],createAnimationState:()=>({begin:()=>null,cancel(){},finish:()=>false})}:JackarooCards;
+const REACTIONS=typeof JackarooReactions==='undefined'?{normalize:value=>typeof value==='string'?{emoji:value}:value,seatPosition:()=> 'center',isAllowed:()=>true}:JackarooReactions;
 const cardAnimations=CARDS.createAnimationState();
 const $=i=>document.getElementById(i);
 let gameGeneration=0;const gameTimers=new Set();
@@ -21,19 +22,33 @@ const playerName=p=>playerNames[p]||CN[p];
 const SEAT_ACCENT=['#247bff','#d92745','#00b879','#f5b83d'];
 
 // ---------- نظام الغرف والدعوات ----------
-let room=null,chatUI=null,localSeat=0,isSpectator=false,remoteRevision=0,networkPending=false;
+let room=null,chatUI=null,localSeat=0,isSpectator=false,remoteRevision=0,networkPending=false,lastReactionAt=0;
 const roomParam=new URL(location.href).searchParams.get('room');
 function localPlayer(){return localSeat<0?0:localSeat}
 function cpuSeat(p){return !room||room.isHost&&!room.isHuman(p)}
 function scheduleCPU(){if(cpuTimer){clearTimeout(cpuTimer);gameTimers.delete(cpuTimer);cpuTimer=null}if(!S||S.over||S.busy||!cpuSeat(S.turn)||S.turn===localSeat)return;const p=S.turn;cpuTimer=later(1400,()=>{cpuTimer=null;if(!S||S.over||S.busy||S.turn!==p||!cpuSeat(p))return;if(S.phase==='play')cpu();else if(S.phase==='burn')burnCard(0,p)})}
 function connectionStatus(message){$('connection').textContent=message}
 function setSeatPresentation(){const seat=localSeat<0?0:localSeat;document.body.style.setProperty('--seat-accent',SEAT_ACCENT[seat]);document.body.dataset.seat=String(seat);const label=$('seatBadge');if(label){label.hidden=false;label.textContent='مقعدك: '+CN[seat]}camAngleY=-seat*Math.PI/2;updateCamera()}
-function showEmoji(emoji){const el=document.createElement('div');el.className='emoji-float';el.textContent=emoji;el.style.left=(35+Math.random()*30)+'%';document.body.appendChild(el);setTimeout(()=>el.remove(),2000)}
+function showEmoji(payload){
+ const item=REACTIONS.normalize(payload),emoji=item?.emoji;if(!emoji)return;
+ const seat=Number.isInteger(payload?.seat)?payload.seat:localSeat,layer=$('reactionLayer'),board=$('board');if(!layer||!board)return;
+ const anchor=$('playerSeats')?.children?.[seat],boardRect=board.getBoundingClientRect(),anchorRect=anchor?.getBoundingClientRect();
+ const x=anchorRect?anchorRect.left+anchorRect.width/2-boardRect.left:boardRect.width/2;
+ const y=anchorRect?anchorRect.top-boardRect.top+Math.min(anchorRect.height*.35,24):boardRect.height*.42;
+ const el=document.createElement('span');el.className='emoji-float '+REACTIONS.seatPosition(seat,localSeat);el.textContent=emoji;el.title=item.hint||item.label;el.setAttribute('role','status');el.setAttribute('aria-label',item.hint||item.label);el.style.left=`${Math.max(18,Math.min(boardRect.width-18,x))}px`;el.style.top=`${Math.max(28,y)}px`;layer.appendChild(el);SFX.play('reaction');
+ setTimeout(()=>el.remove(),1900);
+}
 function roomPlayerEvent(event){const name=event.name||playerName(event.seat);const text=event.type==='leave'?`${name} غادر الغرفة؛ سيتولى الكمبيوتر مقعده`:`انضم ${name} إلى الغرفة واستلم المقعد`;connectionStatus(text);SFX.play(event.type==='leave'?'warning':'join');const note=$('roomNotice');if(note){note.textContent=text;note.hidden=false;setTimeout(()=>note.hidden=true,3800)}}
 function addChatMessage(message){chatUI?.add({...message,own:message.uid===room?.uid,name:message.name||playerName(message.seat)})}
 async function sendChatMessage(text){if(!room||room.seat<0){connectionStatus('المحادثة متاحة للاعبين داخل الغرفة');return}if(Date.now()-lastChatSend<900){connectionStatus('انتظر لحظة قبل إرسال رسالة أخرى');return}lastChatSend=Date.now();try{await room.sendChat(text)}catch(_){connectionStatus('تعذر إرسال الرسالة')}}
 function toggleSound(){const enabled=SFX.setEnabled(!SFX.enabled),button=$('soundToggle');button.setAttribute('aria-pressed',String(enabled));button.textContent=enabled?'🔊 الصوت':'🔇 صامت';if(enabled)SFX.wake()}
-function sendEmoji(emoji){showEmoji(emoji);if(room)room.sendEmoji(emoji).catch(()=>connectionStatus('تعذر إرسال التفاعل'));$('reactions').open=false}
+function sendEmoji(emoji){
+ if(!REACTIONS.isAllowed(emoji))return;
+ const now=Date.now();if(now-lastReactionAt<850)return;lastReactionAt=now;
+ showEmoji({emoji,seat:localSeat});
+ if(room&&!isSpectator)room.sendEmoji(emoji).catch(()=>connectionStatus('تعذر إرسال التفاعل'));
+ $('reactions').open=false;
+}
 async function shareGame(){
  const button=$('shareBtn');button.disabled=true;
  try{
@@ -314,6 +329,7 @@ function draw(){
  $('hand').innerHTML=cards.map(card=>`<button class="cd${card.red?' red':''}${card.selected&&S.stage?' on':''}${dealt?' dl':''}" data-i="${card.index}" data-suit="${card.suit}" style="--r:${card.position.angle}deg;--lift:${card.position.lift}px;--side:${card.position.side}px;--z:${card.position.z};animation-delay:${card.index*70}ms;background-image:url(${cu({r:card.rank,s:card.suit})})${card.selected&&S.stage>=3?';visibility:hidden':''}" title="${card.rank}${card.suit}: ${HINT[card.rank]||card.rank+' خطوات'}" aria-label="${card.ariaLabel}" aria-pressed="${card.selected}"></button>`).join('');S.dealt=0;syncStateToFirebase()}
 document.addEventListener('pointerdown',()=>SFX.wake(),{once:true});
 $('hand').onclick=e=>{const b=e.target.closest('.cd');if(b){SFX.play('cardSelect');pick(+b.dataset.i)}};
+document.querySelectorAll('#emojiReactions [data-reaction]').forEach(button=>button.addEventListener('click',()=>sendEmoji(button.dataset.reaction)));
 chatUI=CHAT.create({document,panel:$('chatPanel'),toggle:$('chatToggle'),body:$('chatBody'),list:$('chatMessages'),mini:$('chatMini'),miniName:$('chatMiniName'),miniText:$('chatMiniText'),badge:$('chatBadge'),floatLayer:$('chatFloatLayer'),input:$('chatInput'),getName:playerName,getColor:seat=>HX[seat]||HX[0],onNotify:()=>SFX.play('chat')});
 $('chatForm').onsubmit=e=>{e.preventDefault();const input=$('chatInput'),value=input.value.trim();if(!value)return;input.value='';sendChatMessage(value)};
 $('msg').onclick=e=>{const b=e.target.closest('button');if(!b)return;if(b.dataset.moveIndex!==undefined){const mv=S.moves[+b.dataset.moveIndex];if(mv&&S.turn===localSeat&&!S.busy&&!isSpectator)play(localPlayer(),S.sel,mv);return}if(b.dataset.x)cancel();else optClick(+b.dataset.k)};

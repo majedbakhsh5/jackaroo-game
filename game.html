@@ -33,7 +33,7 @@
 <details class="hud-details" id="historyPanel"><summary>السجل</summary><div id="log"></div></details>
 </div>
 <div id="roomNotice" role="status" aria-live="polite" hidden></div>
-<div id="board"><canvas id="cv" aria-label="لوح جاكارو رويال ثلاثي الأبعاد"></canvas><div id="playerSeats" aria-label="اللاعبون"></div><div id="zoomControls" role="group" aria-label="تكبير اللوح وتصغيره"><button onclick="changeZoom(1.2)" aria-label="تكبير اللوح">＋</button><button onclick="changeZoom(1/1.2)" aria-label="تصغير اللوح">−</button><button onclick="resetCamera()" aria-label="إظهار اللوح كاملاً">ملاءمة</button></div></div>
+<div id="board"><canvas id="cv" aria-label="لوح جاكارو رويال ثلاثي الأبعاد"></canvas><div id="playerSeats" aria-label="اللاعبون"></div><div id="reactionLayer" aria-live="polite" aria-atomic="false"></div><div id="zoomControls" role="group" aria-label="تكبير اللوح وتصغيره"><button onclick="changeZoom(1.2)" aria-label="تكبير اللوح">＋</button><button onclick="changeZoom(1/1.2)" aria-label="تصغير اللوح">−</button><button onclick="resetCamera()" aria-label="إظهار اللوح كاملاً">ملاءمة</button></div></div>
 <div id="turnWarning" role="timer" aria-live="off" hidden><span id="turnWarningNumber"></span><small id="turnWarningLabel"></small></div>
 <div id="chatFloatLayer" aria-hidden="true"></div>
 
@@ -52,12 +52,13 @@
   </button>
   <section id="chatBody" aria-label="سجل المحادثة" hidden><div id="chatMessages" aria-live="polite"></div><form id="chatForm"><label class="sr-only" for="chatInput">اكتب رسالة</label><input id="chatInput" maxlength="240" autocomplete="off" dir="auto" placeholder="اكتب رسالة قصيرة…"><button type="submit">إرسال</button></form></section>
 </div>
-<details id="reactions"><summary aria-label="التفاعلات">😊 تفاعل</summary><div id="emojiReactions">
-  <button class="emoji-btn" onclick="sendEmoji('👍')">👍</button>
-  <button class="emoji-btn" onclick="sendEmoji('😂')">😂</button>
-  <button class="emoji-btn" onclick="sendEmoji('🔥')">🔥</button>
-  <button class="emoji-btn" onclick="sendEmoji('😢')">😢</button>
-  <button class="emoji-btn" onclick="sendEmoji('🎉')">🎉</button>
+<details id="reactions"><summary aria-label="فتح التفاعلات">😊 تفاعل</summary><div id="emojiReactions" role="group" aria-label="اختر تفاعلاً">
+  <button class="emoji-btn" type="button" data-reaction="😂" aria-label="ضحك" title="ضحك">😂</button>
+  <button class="emoji-btn" type="button" data-reaction="👏" aria-label="تصفيق" title="تصفيق">👏</button>
+  <button class="emoji-btn" type="button" data-reaction="🤩" aria-label="حماس" title="حماس">🤩</button>
+  <button class="emoji-btn" type="button" data-reaction="😮" aria-label="مفاجأة" title="مفاجأة">😮</button>
+  <button class="emoji-btn" type="button" data-reaction="👋" aria-label="تحية" title="تحية">👋</button>
+  <button class="emoji-btn" type="button" data-reaction="🎉" aria-label="احتفال" title="احتفال">🎉</button>
 </div></details>
 <div id="spectatorMsg" role="dialog" aria-modal="true" aria-labelledby="spectatorTitle">
   <h2 id="spectatorTitle">👁️ وضع المشاهدة</h2>
@@ -85,6 +86,7 @@
 <script src="game-chat.js?v=20261019-phase3-2"></script>
 <script src="game-turn-timer.js?v=20261019-phase4-1"></script>
 <script src="game-cards.js?v=20261019-phase5-1"></script>
+<script src="game-reactions.js?v=20261019-phase6-1"></script>
 <script src="game-boot.js?v=20261018-rooms2"></script>
 <script src="game-lobby.js?v=20261019-phase5-1"></script>
 </body>

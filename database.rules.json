@@ -64,7 +64,7 @@
           ".read": "auth != null && root.child('v2rooms').child($room).child('meta/expires').val() > now",
           "$uid": {
             ".write": "auth != null && root.child('v2rooms').child($room).child('meta/expires').val() > now && auth.uid === $uid",
-            ".validate": "newData.hasChildren(['emoji','at']) && newData.child('at').val() <= now && (!data.exists() || now - data.child('at').val() >= 1000) && (newData.child('emoji').val() === '👍' || newData.child('emoji').val() === '😂' || newData.child('emoji').val() === '🔥' || newData.child('emoji').val() === '😢' || newData.child('emoji').val() === '🎉')",
+            ".validate": "newData.hasChildren(['emoji','at']) && newData.child('at').val() <= now && (!data.exists() || now - data.child('at').val() >= 1000) && (newData.child('emoji').val() === '😂' || newData.child('emoji').val() === '👏' || newData.child('emoji').val() === '🤩' || newData.child('emoji').val() === '😮' || newData.child('emoji').val() === '👋' || newData.child('emoji').val() === '🎉')",
             "$other": {
               ".validate": "$other === 'emoji' || $other === 'at'"
             }

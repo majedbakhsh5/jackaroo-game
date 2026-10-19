@@ -111,7 +111,7 @@
         await ref.child('commands/'+uid).set({...command,revision:expectedRevision,nonce:root.crypto.randomUUID(),at:serverTime});
       },
       async sendEmoji(emoji){
-        if(!['👍','😂','🔥','😢','🎉'].includes(emoji)||!connected)return;
+        if(!['😂','👏','🤩','😮','👋','🎉'].includes(emoji)||!connected)return;
         await ref.child('emojis/'+uid).set({emoji,at:serverTime});
       },
       async sendChat(text){
@@ -137,7 +137,7 @@
         if(!isHost)installSelfView();
         if(isHost)installCommands();
         const started=Date.now()-1000,emojiTimes=new Map();
-        const receive=snap=>{const e=snap.val();if(!e||snap.key===uid||e.at<started||e.at<=(emojiTimes.get(snap.key)||0))return;emojiTimes.set(snap.key,e.at);if(['👍','😂','🔥','😢','🎉'].includes(e.emoji))handlers.onEmoji(e.emoji)};
+        const receive=snap=>{const e=snap.val(),senderSeat=Number(Object.keys(seats).find(p=>seats[p]===snap.key));if(!e||snap.key===uid||e.at<started||e.at<=(emojiTimes.get(snap.key)||0))return;emojiTimes.set(snap.key,e.at);if(['😂','👏','🤩','😮','👋','🎉'].includes(e.emoji))handlers.onEmoji?.({emoji:e.emoji,seat:Number.isInteger(senderSeat)&&senderSeat>=0&&senderSeat<4?senderSeat:-1,uid:snap.key,at:e.at})};
         watch('emojis','child_added',receive);watch('emojis','child_changed',receive);
         watch('chat','value',snap=>{const owners=snap.val()||{};for(const [ownerUID,messages]of Object.entries(owners))for(const [messageID,item]of Object.entries(messages||{})){const key=ownerUID+'/'+messageID,at=Number(item?.at),storedSeat=Number(item?.seat),currentSeat=Number(Object.keys(seats).find(p=>seats[p]===ownerUID));if(!item||seenChat.has(key)||pendingChat.has(key)||ownerUID===uid&&chatReady||typeof item.text!=='string'||item.text.length>240||!Number.isFinite(at))continue;seenChat.add(key);handlers.onChat?.({id:key,text:item.text,at,live:chatReady,uid:ownerUID,name:typeof item.name==='string'?item.name.slice(0,18):players[ownerUID]?.name||'',seat:Number.isInteger(storedSeat)&&storedSeat>=0&&storedSeat<4?storedSeat:currentSeat})}chatReady=true});
       },
