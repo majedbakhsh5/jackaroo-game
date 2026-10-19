@@ -5,10 +5,12 @@ const SFX=typeof JackarooSound==='undefined'?{play(){},setEnabled(){return true}
 const MOTION=typeof JackarooMotion==='undefined'?{describe:m=>({...m,path:[]}),shouldAnimate:()=>false,runCellSequence:(m,a,l,d)=>{d?.();return{cancel(){}}},createQueue:()=>({enqueue(){return false},cancel(){},get busy(){return false}})}:JackarooMotion;
 const CHAT=typeof JackarooChat==='undefined'?{create:()=>({add(){return false},setOpen(){},get open(){return false}})}:JackarooChat;
 const TURN=typeof JackarooTurnTimer==='undefined'?null:JackarooTurnTimer;
+const CARDS=typeof JackarooCards==='undefined'?{hand:()=>[],createAnimationState:()=>({begin:()=>null,cancel(){},finish:()=>false})}:JackarooCards;
+const cardAnimations=CARDS.createAnimationState();
 const $=i=>document.getElementById(i);
 let gameGeneration=0;const gameTimers=new Set();
 function later(ms,f){const generation=gameGeneration;const id=setTimeout(()=>{gameTimers.delete(id);if(generation===gameGeneration)f()},ms);gameTimers.add(id);return id}
-function resetGameTimers(){gameGeneration++;gameTimers.forEach(clearTimeout);gameTimers.clear()}
+function resetGameTimers(){if(typeof cardAnimations!=='undefined')cardAnimations.cancel();gameGeneration++;gameTimers.forEach(clearTimeout);gameTimers.clear()}
 
 let S,MS=[],RG=[],TW=[],PS=[];
 let cpuTimer=null,ownTurnBefore=null,lastChatSend=0,turnClockHandle=null,clockKey='',warnedClockKey='';
@@ -217,9 +219,9 @@ function nextTurn(p){if(S.hands.every(h=>!h.length)){startRound();return}
  if(!S.hands[q].length){nextTurn(q);return}
  S.turn=q;S.turnAt=Date.now();beginTurnTimer();S.msg='';draw();scheduleCPU()}
 function win(){for(let t=0;t<2;t++)if(home(t)&&home(t+2)){S.over=1;S.phase='over';S.msg=isSpectator?`انتهت اللعبة: فاز ${t?'الأحمر والذهبي':'الأزرق والأخضر'}`:t===localPlayer()%2?'🎉 مبروك! فزت أنت وشريكك':'انتهت اللعبة: فاز الفريق الآخر';SFX.play('win');burst(new THREE.Vector3(0,BT+1,0),0xffd65a,110,.75);ringFx(new THREE.Vector3(0,BT+.2,0),0xffd65a);draw();return true}return false}
-function play(p,ci,mv,forced=false){if(room&&!room.isHost){submitCommand({type:mv?'play':'discard',card:S.hands[p][ci],move:mv?moveKey(mv):null});return}const human=room?room.isHuman(p):p===localSeat;if(!forced&&human&&!authorizeTimedAction(p,ci))return;const cd=S.hands[p][ci];if(typeof TURN!=='undefined'&&TURN)S.turnTimer=TURN.resolve(S.turnTimer,S);const warning=typeof document==='undefined'?null:document.getElementById('turnWarning');if(warning)warning.hidden=true;let t=`${playerName(p)}: ${cd.r}${cd.s}`,part=false;S.busy=1;clearRings();
- if(!mv)SFX.play('discard');else if(mv.k==='skip')SFX.play('warning');
- const hc=S.cc;S.cc=null;centerCard(cd,p,hc&&hc.mesh);
+function play(p,ci,mv,forced=false){if(room&&!room.isHost){submitCommand({type:mv?'play':'discard',card:S.hands[p][ci],move:mv?moveKey(mv):null});return}const human=room?room.isHuman(p):p===localSeat;if(!forced&&human&&!authorizeTimedAction(p,ci))return;const cd=S.hands[p][ci],cardToken=typeof cardAnimations==='undefined'?null:cardAnimations.begin('play');if(typeof TURN!=='undefined'&&TURN)S.turnTimer=TURN.resolve(S.turnTimer,S);const warning=typeof document==='undefined'?null:document.getElementById('turnWarning');if(warning)warning.hidden=true;let t=`${playerName(p)}: ${cd.r}${cd.s}`,part=false;S.busy=1;clearRings();
+ if(!mv)SFX.play('discard');else{SFX.play('cardPlay');if(mv.k==='skip')SFX.play('warning')}
+ const hc=S.cc;S.cc=null;centerCard(cd,p,hc&&hc.mesh);later(620,()=>{if(cardToken&&typeof cardAnimations!=='undefined')cardAnimations.finish(cardToken)});
  S.stage=0;S.opt=null;S.srcs=[];
  if(!mv){S.hands[p]=[];t=`${playerName(p)}: لا توجد ورقة تُلعب، أُحرقت كل الأوراق`}
  else if(mv.k==='skip'){S.hands[p].splice(ci,1);S.skip[(p+3)%4]=1;S.bp=(p+3)%4;t+=` ← ${playerName((p+3)%4)} يُمنع من اللعب ويحرق ورقة`}
@@ -308,10 +310,10 @@ function draw(){
  let ob='';if(S.stage>=3&&S.opts.length>1)ob=S.opts.map((o,k)=>`<button data-k="${k}" class="${S.opt===o.key?'on':''}">${lab(o,S.hands[localPlayer()][S.sel])}</button>`).join('');
  if(S.stage>=3)ob+='<button class="cx" data-x="1">رجوع</button>';
  const keyboard=S.stage>=3?`<details id="keyboardMoves"><summary>اختيار الحجر والحركة بالأزرار</summary>${S.moves.map((mv,i)=>`<button data-move-index="${i}">${CN[mv.c]} · الحجر ${mv.i+1} · ${mv.k==='out'?'إنزال':mv.k==='swap'?'تبديل مع '+CN[mv.tp]+' '+(mv.tj+1):mv.k==='skip'?'منع التالي':(mv.n||4)+' خطوات'}</button>`).join('')}</details>`:'';$('msg').innerHTML=`<div id="ob">${ob}</div>${keyboard}`;if(m){const text=document.createElement('span');text.textContent=m;$('msg').prepend(text)}
- const n=S.hands[localPlayer()].length;$('hand').innerHTML=(isSpectator?[]:S.hands[localPlayer()]).map((c,i)=>{const red=c.s==='♥'||c.s==='♦',d=i-(n-1)/2;
-  return `<button class="cd${S.sel===i&&S.stage?' on':''}${S.dealt?' dl':''}" data-i="${i}" style="--r:${d*7}deg;--y:${Math.abs(d)*6}px;animation-delay:${i*90}ms;background-image:url(${cu(c)})${S.sel===i&&S.stage>=3?';visibility:hidden':''}" title="${c.r}${c.s}: ${HINT[c.r]||c.r+' خطوات'}" aria-label="${c.r} ${c.s}"></button>`}).join('');S.dealt=0;syncStateToFirebase()}
+ const dealt=!!S.dealt,cards=CARDS.hand(S.hands[localPlayer()],{visible:!isSpectator,selected:S.sel});if(dealt&&cards.length){const token=cardAnimations.begin('deal');later(620+cards.length*70,()=>cardAnimations.finish(token))}
+ $('hand').innerHTML=cards.map(card=>`<button class="cd${card.red?' red':''}${card.selected&&S.stage?' on':''}${dealt?' dl':''}" data-i="${card.index}" data-suit="${card.suit}" style="--r:${card.position.angle}deg;--lift:${card.position.lift}px;--side:${card.position.side}px;--z:${card.position.z};animation-delay:${card.index*70}ms;background-image:url(${cu({r:card.rank,s:card.suit})})${card.selected&&S.stage>=3?';visibility:hidden':''}" title="${card.rank}${card.suit}: ${HINT[card.rank]||card.rank+' خطوات'}" aria-label="${card.ariaLabel}" aria-pressed="${card.selected}"></button>`).join('');S.dealt=0;syncStateToFirebase()}
 document.addEventListener('pointerdown',()=>SFX.wake(),{once:true});
-$('hand').onclick=e=>{const b=e.target.closest('.cd');if(b){SFX.play('tap');pick(+b.dataset.i)}};
+$('hand').onclick=e=>{const b=e.target.closest('.cd');if(b){SFX.play('cardSelect');pick(+b.dataset.i)}};
 chatUI=CHAT.create({document,panel:$('chatPanel'),toggle:$('chatToggle'),body:$('chatBody'),list:$('chatMessages'),mini:$('chatMini'),miniName:$('chatMiniName'),miniText:$('chatMiniText'),badge:$('chatBadge'),floatLayer:$('chatFloatLayer'),input:$('chatInput'),getName:playerName,getColor:seat=>HX[seat]||HX[0],onNotify:()=>SFX.play('chat')});
 $('chatForm').onsubmit=e=>{e.preventDefault();const input=$('chatInput'),value=input.value.trim();if(!value)return;input.value='';sendChatMessage(value)};
 $('msg').onclick=e=>{const b=e.target.closest('button');if(!b)return;if(b.dataset.moveIndex!==undefined){const mv=S.moves[+b.dataset.moveIndex];if(mv&&S.turn===localSeat&&!S.busy&&!isSpectator)play(localPlayer(),S.sel,mv);return}if(b.dataset.x)cancel();else optClick(+b.dataset.k)};
@@ -486,8 +488,8 @@ function centerCard(cd,p,m0){const m=m0||makeCard(cd),s=rot(p,0,15);if(!m0){m.po
  PILE.push(m);while(PILE.length>6)disposeCard(PILE.shift());
  const ox=(rnd()-.5)*.5,oz=(rnd()-.5)*.5;PILE.forEach((c,k)=>{c.userData.ty=BT+.2+k*.06;if(c!==m)c.position.y=c.userData.ty});
  fly(m,new THREE.Vector3(ox,m.userData.ty,oz),.8,0,2.6,null,new THREE.Euler(0,seatAngle(p),0))}
-function toCenter(ci){const cd=S.hands[localPlayer()][ci];if(!cd)return;const m=makeCard(cd),st=rot(0,0,16);m.position.set(st[0],5,st[1]);scene.add(m);
- fly(m,new THREE.Vector3(0,3.1,.2),.55,0,1.2,null,new THREE.Euler(.55,seatAngle(localPlayer()),0));S.cc={mesh:m,remove(){disposeCard(m)},style:{}}}
+function toCenter(ci){const cd=S.hands[localPlayer()][ci];if(!cd)return;const token=cardAnimations.begin('flip'),m=makeCard(cd),st=rot(0,0,16);SFX.play('cardFlip');m.position.set(st[0],5,st[1]);scene.add(m);
+ fly(m,new THREE.Vector3(0,3.1,.2),.55,0,1.2,()=>cardAnimations.finish(token),new THREE.Euler(.55,seatAngle(localPlayer()),0));S.cc={mesh:m,remove(){disposeCard(m)},style:{}}}
 /* أحجار كريستالية متعددة الأوجه، مع الحفاظ على مجموعة الحجر وهويته للنقر */
 const PG=new THREE.LatheGeometry([[0,0],[.33,0],[.35,.09],[.29,.17],[.23,.27],[.19,.38],[.29,.55],[.31,.7],[.24,.84],[.12,.92],[0,.96]].map(([x,y])=>new THREE.Vector2(x,y)),8),HG=new THREE.IcosahedronGeometry(.24,0),CG=new THREE.OctahedronGeometry(.16,0),BG=new THREE.CylinderGeometry(.42,.46,.12,24),RG1=new THREE.TorusGeometry(.4,.035,6,24),RG2=new THREE.TorusGeometry(.29,.025,6,24);
 function pawn(p,i){const mat=new THREE.MeshPhysicalMaterial({color:lc(PCOL[p]),transparent:true,opacity:.83,depthWrite:false,metalness:.12,roughness:.08,flatShading:true,clearcoat:1,clearcoatRoughness:.06,envMapIntensity:1.5,emissive:lc(PCOL[p]),emissiveIntensity:.09}),coreMat=new THREE.MeshStandardMaterial({color:lc(PCOL[p]),emissive:lc(PCOL[p]),emissiveIntensity:.72,metalness:.2,roughness:.24,flatShading:true}),baseMat=new THREE.MeshStandardMaterial({color:lc(0xd3b376),metalness:.86,roughness:.22,envMapIntensity:.9}),g=new THREE.Group();g.userData={p,i};g.mat=mat;
