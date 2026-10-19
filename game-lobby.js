@@ -7,9 +7,9 @@
  async function choose(mode){
   if(loading)return;const playerName=nameField.value.trim().replace(/\s+/g,' ');if(!playerName){nameField.setCustomValidity('اكتب اسمك قبل الدخول');nameField.reportValidity();nameField.focus();return}nameField.setCustomValidity('');try{sessionStorage.setItem('jackaroo-player-name',playerName)}catch(_){}window.JACKAROO_PLAYER_NAME=playerName;loading=true;window.JACKAROO_MODE=mode;
   for(const name of ['startAI','startFriends','startJoin'])$(name).disabled=true;
-  $('startStatus').textContent='جارٍ تجهيز اللوح…';
-  try{await load('three.min.js?v=20261018-rooms1');await load('game.js?v=20261019-phase5-1');$('startMenu').hidden=true;document.body.classList.remove('choosing')}
-  catch(e){$('startStatus').textContent=e.message;const retry=document.createElement('button');retry.textContent='إعادة المحاولة';retry.onclick=()=>location.reload();$('startStatus').appendChild(retry)}
+  $('startStatus').textContent='جارٍ تجهيز اللوح…';if($('startStatus').setAttribute)$('startStatus').setAttribute('aria-busy','true');
+  try{await load('three.min.js?v=20261018-rooms1');await load('game.js?v=20261019-phase7-1');$('startMenu').hidden=true;document.body.classList.remove('choosing')}
+  catch(e){if($('startStatus').setAttribute)$('startStatus').setAttribute('aria-busy','false');$('startStatus').textContent='تعذر تجهيز اللوح';const error=document.createElement('span');error.setAttribute('role','alert');error.textContent=' — '+(e.message||'تحقق من الاتصال ثم أعد المحاولة.');const retry=document.createElement('button');retry.type='button';retry.textContent='إعادة المحاولة';retry.onclick=()=>location.reload();$('startStatus').append(error,retry)}
  }
  $('startAI').onclick=()=>choose('ai');$('startFriends').onclick=()=>choose('friends');$('startJoin').onclick=()=>choose('join');
 })();

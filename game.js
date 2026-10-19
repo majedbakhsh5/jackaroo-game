@@ -75,7 +75,7 @@ function receiveGame(view){
  if(localSeat>=0)S.hands[localSeat]=view.hand||[];
  restoreSelectedCard();
  if(animate)motionQueue.enqueue(motion);else if(!duplicate||!motionQueue.busy){cancelMotion();}
- networkPending=false;draw();
+ networkPending=false;draw();if(S.over)presentMatchResult();
 }
 function authorizeTimedAction(p,ci,at=Date.now()){
  if(!TURN||S.phase!=='play')return true;ensureTurnTimer();const timer=S.turnTimer,deadline=S.turnAt+TURN.TURN_MS;
@@ -233,7 +233,8 @@ function nextTurn(p){if(S.hands.every(h=>!h.length)){startRound();return}
  let q=p;for(let k=0;k<4;k++){q=(q+3)%4;if(S.skip[q]){S.skip[q]=0;log(`${playerName(q)} فاته الدور (10)`);continue}if(S.hands[q].length)break}
  if(!S.hands[q].length){nextTurn(q);return}
  S.turn=q;S.turnAt=Date.now();beginTurnTimer();S.msg='';draw();scheduleCPU()}
-function win(){for(let t=0;t<2;t++)if(home(t)&&home(t+2)){S.over=1;S.phase='over';S.msg=isSpectator?`انتهت اللعبة: فاز ${t?'الأحمر والذهبي':'الأزرق والأخضر'}`:t===localPlayer()%2?'🎉 مبروك! فزت أنت وشريكك':'انتهت اللعبة: فاز الفريق الآخر';SFX.play('win');burst(new THREE.Vector3(0,BT+1,0),0xffd65a,110,.75);ringFx(new THREE.Vector3(0,BT+.2,0),0xffd65a);draw();return true}return false}
+function presentMatchResult(){const panel=typeof document==='undefined'?null:$('matchResult');if(!panel)return;const title=$('matchResultTitle'),text=$('matchResultText');if(!title||!text)return;const won=!isSpectator&&S.msg?.startsWith('🎉');title.textContent=won?'مبروك، هذا فريقك!':'انتهت الجولة';text.textContent=S.msg||'أحسنتم اللعب. يمكنك بدء جولة جديدة أو العودة إلى القائمة.';panel.hidden=false;panel.querySelector?.('button')?.focus()}
+function win(){for(let t=0;t<2;t++)if(home(t)&&home(t+2)){S.over=1;S.phase='over';S.msg=isSpectator?`انتهت اللعبة: فاز ${t?'الأحمر والذهبي':'الأزرق والأخضر'}`:t===localPlayer()%2?'🎉 مبروك! فزت أنت وشريكك':'انتهت اللعبة: فاز الفريق الآخر';SFX.play('win');burst(new THREE.Vector3(0,BT+1,0),0xffd65a,110,.75);ringFx(new THREE.Vector3(0,BT+.2,0),0xffd65a);draw();presentMatchResult();return true}return false}
 function play(p,ci,mv,forced=false){if(room&&!room.isHost){submitCommand({type:mv?'play':'discard',card:S.hands[p][ci],move:mv?moveKey(mv):null});return}const human=room?room.isHuman(p):p===localSeat;if(!forced&&human&&!authorizeTimedAction(p,ci))return;const cd=S.hands[p][ci],cardToken=typeof cardAnimations==='undefined'?null:cardAnimations.begin('play');if(typeof TURN!=='undefined'&&TURN)S.turnTimer=TURN.resolve(S.turnTimer,S);const warning=typeof document==='undefined'?null:document.getElementById('turnWarning');if(warning)warning.hidden=true;let t=`${playerName(p)}: ${cd.r}${cd.s}`,part=false;S.busy=1;clearRings();
  if(!mv)SFX.play('discard');else{SFX.play('cardPlay');if(mv.k==='skip')SFX.play('warning')}
  const hc=S.cc;S.cc=null;centerCard(cd,p,hc&&hc.mesh);later(620,()=>{if(cardToken&&typeof cardAnimations!=='undefined')cardAnimations.finish(cardToken)});
@@ -330,6 +331,7 @@ function draw(){
 document.addEventListener('pointerdown',()=>SFX.wake(),{once:true});
 $('hand').onclick=e=>{const b=e.target.closest('.cd');if(b){SFX.play('cardSelect');pick(+b.dataset.i)}};
 document.querySelectorAll('#emojiReactions [data-reaction]').forEach(button=>button.addEventListener('click',()=>sendEmoji(button.dataset.reaction)));
+$('matchResult')?.addEventListener('click',event=>{if(event.target.closest('[onclick*="newGame"]'))$('matchResult').hidden=true});
 chatUI=CHAT.create({document,panel:$('chatPanel'),toggle:$('chatToggle'),body:$('chatBody'),list:$('chatMessages'),mini:$('chatMini'),miniName:$('chatMiniName'),miniText:$('chatMiniText'),badge:$('chatBadge'),floatLayer:$('chatFloatLayer'),input:$('chatInput'),getName:playerName,getColor:seat=>HX[seat]||HX[0],onNotify:()=>SFX.play('chat')});
 $('chatForm').onsubmit=e=>{e.preventDefault();const input=$('chatInput'),value=input.value.trim();if(!value)return;input.value='';sendChatMessage(value)};
 $('msg').onclick=e=>{const b=e.target.closest('button');if(!b)return;if(b.dataset.moveIndex!==undefined){const mv=S.moves[+b.dataset.moveIndex];if(mv&&S.turn===localSeat&&!S.busy&&!isSpectator)play(localPlayer(),S.sel,mv);return}if(b.dataset.x)cancel();else optClick(+b.dataset.k)};

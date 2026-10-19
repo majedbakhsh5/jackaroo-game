@@ -5,21 +5,21 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>جاكارو رويال | Obsidian &amp; Gold</title>
 <meta name="robots" content="noindex">
-<link rel="stylesheet" href="game.css?v=20261019-phase5-1">
+<link rel="stylesheet" href="game.css?v=20261019-phase7-1">
 </head>
 <body class="choosing">
-<section id="startMenu" aria-labelledby="startTitle">
-  <div class="start-brand">♛ <span>JACKAROO ROYALE</span><strong>جاكارو رويال</strong></div>
+<section id="startMenu" class="lobby-shell" aria-labelledby="startTitle">
+  <div class="lobby-eyebrow"><span class="brand-mark" aria-hidden="true">♛</span><span>JACKAROO ROYALE</span><small>OBSIDIAN &amp; GOLD</small></div>
   <h1 id="startTitle">كيف تحب أن تلعب؟</h1>
-  <p>اختر نمط اللعب، ثم خذ مكانك على اللوح.</p>
-  <label for="playerName">اسمك في اللعبة</label>
-  <input id="playerName" maxlength="18" autocomplete="nickname" placeholder="اكتب اسمك" required>
+  <p class="lobby-lead">اختر مقعدك، اكتب اسمك، واترك الباقي على اللوح.</p>
+  <div class="lobby-name"><label for="playerName">اسمك في اللعبة</label><input id="playerName" maxlength="18" autocomplete="nickname" placeholder="اكتب اسماً يظهر للاعبين" required aria-describedby="lobbyNameHint"><small id="lobbyNameHint">حتى 18 حرفاً · لا تحتاج إلى حساب</small></div>
+  <p id="lobbyModeNote" class="lobby-mode-note"><span aria-hidden="true">✦</span> اللعب الفردي سريع، وغرف الأصدقاء تحفظ مقعدك أثناء المباراة.</p>
   <div class="start-options">
     <button id="startJoin" hidden><strong>انضم إلى غرفة الأصدقاء</strong><span>افتح الدعوة والعب معهم</span></button>
     <button id="startFriends"><strong>العب مع الأصدقاء</strong><span>أنشئ غرفة وشارك رابط الدعوة، ثم ابدأ المباراة</span></button>
     <button id="startAI"><strong>العب مع الكمبيوتر</strong><span>مباراة فردية مع ثلاثة لاعبين بالذكاء الاصطناعي</span></button>
   </div>
-  <p id="startStatus" role="status">لا تبدأ المباراة إلا بعد اختيارك.</p>
+  <p id="startStatus" role="status" aria-live="polite" aria-busy="false">لا تبدأ المباراة إلا بعد اختيارك.</p>
 </section>
 <div id="hud">
 <div id="top" class="pn"><div id="turn"></div><div id="turnClock" role="timer" aria-live="off" hidden></div><div id="connection" role="status">لعب فردي ضد الكمبيوتر</div><div id="score"></div><span id="seatBadge" hidden></span><button onclick="newGame()">لعبة جديدة</button></div>
@@ -79,6 +79,7 @@
 <details id="invitePanel" hidden><summary>رابط دعوة الأصدقاء</summary><div><label for="inviteLink">أرسل هذا الرابط لأصدقائك</label><input id="inviteLink" readonly dir="ltr"><button onclick="shareGame()">نسخ / مشاركة الرابط</button><p>ابدأ المباراة عند استعدادكم. يلعب الكمبيوتر المقاعد الشاغرة.</p></div></details>
 <div id="hand" aria-label="أوراقك"></div>
 <div id="gameError" role="alert" hidden></div>
+<section id="matchResult" class="match-result" role="dialog" aria-modal="true" aria-labelledby="matchResultTitle" hidden><div class="match-result-mark" aria-hidden="true">♛</div><p class="eyebrow">نهاية الجولة</p><h2 id="matchResultTitle">انتهت اللعبة</h2><p id="matchResultText"></p><div class="match-result-actions"><button type="button" onclick="newGame()">جولة جديدة</button><button type="button" class="quiet" onclick="location.href='game.html'">العودة إلى القائمة</button></div></section>
 <script src="room-config.js?v=20261018-rooms1"></script>
 <script src="room-client.js?v=20261019-phase3-5"></script>
 <script src="game-sound.js?v=20261019-phase5-1"></script>
